@@ -29,6 +29,7 @@ export function baseOptions() {
     workers: { type: 'string' },
     'chunk-size': { type: 'string' },
     'no-resume': { type: 'boolean', default: false },
+    'skip-package': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false }
   };
 }

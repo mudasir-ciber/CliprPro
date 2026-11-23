@@ -1,14 +1,15 @@
 /**
- * Full pipeline orchestrator (Phases 1–8).
+ * Full pipeline orchestrator (Phases 1–10).
  *
  * Script + Voiceover
  *   -> Phase 2 analysis (timeline.json)
  *   -> Phase 3 storyboard (visualIntent per scene)
  *   -> deterministic scene renderAt(time)
- *   -> Playwright frames
+ *   -> Playwright frames (Phase 9 long-form)
  *   -> Phase 7 visual QC (qc.json)
  *   -> Phase 8 self-repair loop (bounded) if QC fails
  *   -> FFmpeg encode -> original voiceover -> final.mp4
+ *   -> Phase 10 production delivery package
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,6 +24,7 @@ import { updateMetadata } from './job.js';
 import { analyzeVideo } from './analyzeVideo.js';
 import { planStoryboardForJob } from './planStoryboard.js';
 import { renderWithSelfRepair } from '../repair/loop.js';
+import { packageDelivery } from '../package/delivery.js';
 
 /**
  * @param {object} options
@@ -156,6 +158,31 @@ export async function generateVideo(options) {
     for (const w of verification.warnings) logger.warn(w);
     logger.info('Final video created');
 
+    let delivery = null;
+    if (!config.skipPackage) {
+      updateMetadata(job, { status: 'packaging' });
+      logger.info('Building production delivery package');
+      delivery = await packageDelivery({
+        job,
+        script,
+        timelineDoc,
+        storyboard,
+        qc,
+        repair,
+        verification,
+        fps: config.fps,
+        width: config.width,
+        height: config.height,
+        durationSec: audio.durationSec,
+        finalPath,
+        config,
+        logger,
+        sceneName
+      });
+    } else {
+      logger.info('Delivery packaging skipped');
+    }
+
     if (!config.keepFrames) {
       fs.rmSync(job.paths.frames, { recursive: true, force: true });
       fs.mkdirSync(job.paths.frames);
@@ -171,9 +198,12 @@ export async function generateVideo(options) {
       repair: repair
         ? { attempted: repair.attempted, attempts: repair.attemptCount, success: repair.success, path: repair.path }
         : null,
+      delivery: delivery
+        ? { path: delivery.paths?.deliveryJson, dir: delivery.paths?.deliveryDir, titles: delivery.packaging?.titles }
+        : null,
       timings,
       analysisCacheKey: analysis.cacheKey,
-      phase: repair?.attempted ? 8 : qc ? 7 : storyboard ? 6 : 2
+      phase: delivery ? 10 : repair?.attempted ? 8 : qc ? 7 : storyboard ? 6 : 2
     });
 
     return {
@@ -189,6 +219,7 @@ export async function generateVideo(options) {
       verification,
       qc,
       repair,
+      delivery,
       timings,
       timeline: timelineDoc,
       storyboard,
@@ -196,7 +227,8 @@ export async function generateVideo(options) {
         ...analysis.paths,
         storyboard: storyboard ? path.join(job.paths.analysis, 'storyboard.json') : null,
         qc: qc?.path || null,
-        repair: repair?.path || null
+        repair: repair?.path || null,
+        delivery: delivery?.paths?.deliveryJson || null
       }
     };
   } catch (err) {

@@ -29,6 +29,7 @@ Options:
   --workers <n>          Parallel render workers (Phase 9; auto≥2 on long jobs)
   --chunk-size <n>       Frames per render chunk (default 90)
   --no-resume            Do not skip existing PNG frames
+  --skip-package         Skip Phase 10 delivery packaging
   -h, --help`;
 
 const values = parseCli();
@@ -65,7 +66,8 @@ try {
     repairMaxAttempts: values['repair-attempts'],
     renderWorkers: values.workers,
     renderChunkSize: values['chunk-size'],
-    renderResume: values['no-resume'] ? false : undefined
+    renderResume: values['no-resume'] ? false : undefined,
+    skipPackage: values['skip-package']
   });
 
   console.log(`
@@ -81,13 +83,14 @@ Planner: ${result.storyboard?.planner ?? '(skipped)'}
 Timeline valid: ${result.timeline?.validation?.valid}
 Visual QC: ${result.qc ? (result.qc.passed ? 'passed' : 'failed') : '(skipped)'}
 Self-repair: ${result.repair ? (result.repair.attempted ? `${result.repair.attemptCount} attempt(s), ${result.repair.success ? 'ok' : 'failed'}` : 'not needed') : '(n/a)'}
+Delivery: ${result.delivery ? (result.delivery.packaging?.titles?.[0] || 'ready') : '(skipped)'}
 
 Output:
 ${printRel(result.outputPath)}
 
 Timeline:
 ${printRel(result.analysisPaths.timeline)}
-${result.analysisPaths.storyboard ? `Storyboard:\n${printRel(result.analysisPaths.storyboard)}\n` : ''}${result.analysisPaths.qc ? `QC:\n${printRel(result.analysisPaths.qc)}\n` : ''}${result.analysisPaths.repair ? `Repair:\n${printRel(result.analysisPaths.repair)}\n` : ''}`);
+${result.analysisPaths.storyboard ? `Storyboard:\n${printRel(result.analysisPaths.storyboard)}\n` : ''}${result.analysisPaths.qc ? `QC:\n${printRel(result.analysisPaths.qc)}\n` : ''}${result.analysisPaths.repair ? `Repair:\n${printRel(result.analysisPaths.repair)}\n` : ''}${result.analysisPaths.delivery ? `Delivery:\n${printRel(result.analysisPaths.delivery)}\n` : ''}${result.delivery?.paths?.deliveryDir ? `Handoff:\n${printRel(result.delivery.paths.deliveryDir)}\n` : ''}`);
 } catch (err) {
   fail(err);
 }

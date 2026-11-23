@@ -1,5 +1,5 @@
 ---
-description: Analyze + storyboard + generate final.mp4 (Phases 1–9)
+description: Analyze + storyboard + generate final.mp4 + delivery package (Phases 1–10)
 ---
 
 Use the `video-generation` skill.
@@ -8,17 +8,12 @@ User arguments: `$ARGUMENTS`
 
 Steps:
 
-1. Run `npm run check-env`. Stop on failure with the exact message.
+1. Run `npm run doctor` (or `npm run check-env`). Stop on failure.
 2. Resolve inputs (`--script` / `--audio` / `--input`, default `--input input`).
 3. Run: `npm run generate -- <arguments>`
-   - Default planner is heuristic storyboard (Phases 3–6 visualIntent + camera).
-   - Pass `--planner llm` only if the user requests LLM planning and keys exist.
-   - Pass `--skip-storyboard` only if the user wants Phase 2 visuals only.
-   - Pass `--scene threejs` for Phase 5 WebGL + Phase 6 camera (default is `storyboard` Canvas 2D).
-   - Phase 7 visual QC runs by default; `--skip-qc` / `--qc-strict` as requested.
-   - Phase 8 self-repair on QC failure (`--skip-repair` / `--repair-attempts n`).
-   - Phase 9 long-form: `--workers n`, `--chunk-size n`, `--no-resume` (auto workers on long jobs).
-4. On success report Job ID, duration, FPS, resolution, storyboard, QC, repair, render workers/chunks if present, and artifact paths.
+   - Phases 1–9 pipeline (storyboard, QC, repair, long-form render) as previously documented.
+   - Phase 10 packaging runs by default; `--skip-package` only if requested.
+4. On success report Job ID, media stats, QC/repair, delivery titles, `output/final.mp4`, `delivery/` handoff folder.
 5. On failure report `ERROR (CODE)` and summarize `logs/pipeline.log` once.
 
-Rules: use repository pipeline only; do not claim Phase 10+ features.
+Rules: use repository pipeline only; phases 1–10 are the production surface.

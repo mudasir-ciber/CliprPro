@@ -1,5 +1,5 @@
 /**
- * Centralized configuration for Phases 1–9.
+ * Centralized configuration for Phases 1–10.
  * Priority: function overrides → process env → .env file → defaults.
  */
 import fs from 'node:fs';
@@ -41,7 +41,8 @@ export const DEFAULTS = Object.freeze({
   renderResume: true,
   longFormAuto: true,
   longFormMinFrames: 120,
-  longFormWorkers: 2
+  longFormWorkers: 2,
+  skipPackage: false
 });
 
 /** Minimal .env loader (no dependency). Does not override variables already set. */
@@ -172,6 +173,7 @@ export function getConfig(overrides = {}) {
         : process.env.LONG_FORM_AUTO !== '0',
     longFormMinFrames:
       overrides.longFormMinFrames ?? envNumber('LONG_FORM_MIN_FRAMES', DEFAULTS.longFormMinFrames),
-    longFormWorkers: overrides.longFormWorkers ?? envNumber('LONG_FORM_WORKERS', DEFAULTS.longFormWorkers)
+    longFormWorkers: overrides.longFormWorkers ?? envNumber('LONG_FORM_WORKERS', DEFAULTS.longFormWorkers),
+    skipPackage: overrides.skipPackage === true || process.env.SKIP_PACKAGE === '1'
   };
 }
