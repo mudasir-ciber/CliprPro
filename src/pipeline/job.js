@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const SUBDIRS = ['input', 'audio', 'scenes', 'frames', 'output', 'logs'];
+const SUBDIRS = ['input', 'audio', 'analysis', 'scenes', 'frames', 'output', 'logs'];
 
 function datePart(date) {
   const p = (n) => String(n).padStart(2, '0');

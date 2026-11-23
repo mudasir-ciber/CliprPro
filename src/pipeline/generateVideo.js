@@ -1,33 +1,27 @@
 /**
- * Phase 1 pipeline orchestrator.
+ * Full pipeline orchestrator (Phase 1 render + Phase 2 analysis).
  *
- * Script + Voiceover -> validation -> audio analysis -> job -> scene -> deterministic
- * Playwright rendering -> FFmpeg encode -> original voiceover merge -> final.mp4
+ * Script + Voiceover
+ *   -> Phase 2 analysis (timeline.json)
+ *   -> deterministic scene (uses timeline narration when available)
+ *   -> Playwright frames -> FFmpeg encode -> original voiceover -> final.mp4
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { getConfig } from '../config.js';
 import { createLogger } from '../utils/logger.js';
-import { VideoGenError } from '../utils/errors.js';
+import { VideoGenError, ErrorCodes } from '../utils/errors.js';
 import { checkDependencies } from './checkDependencies.js';
-import { validateInputs } from './validateInputs.js';
-import { createJob, updateMetadata } from './job.js';
 import { createTimeline } from './timeline.js';
 import { generateScene } from '../scenes/index.js';
 import { renderFrames } from '../renderer/renderer.js';
 import { encodeFrames, mergeAudio } from '../renderer/encoder.js';
 import { verifyOutput } from './verifyOutput.js';
+import { updateMetadata } from './job.js';
+import { analyzeVideo } from './analyzeVideo.js';
 
 /**
  * @param {object} options
- * @param {string} options.scriptPath
- * @param {string} options.audioPath
- * @param {number} [options.fps]
- * @param {string} [options.resolution]   "1920x1080"
- * @param {string} [options.jobsDir]
- * @param {boolean} [options.keepFrames]
- * @param {number} [options.maxFrames]    render only first N frames (testing only)
- * @param {object} [options.logger]
  */
 export async function generateVideo(options) {
   const config = getConfig(options);
@@ -37,72 +31,59 @@ export async function generateVideo(options) {
   let job = null;
 
   try {
-    // 1. Dependencies (fail early with clear messages)
     const deps = await checkDependencies(config);
     logger.info(`FFmpeg ${deps.ffmpeg} / FFprobe ${deps.ffprobe} / Chromium OK`);
 
-    // 2. Inputs + audio analysis
-    const { script, audio } = await validateInputs({
-      scriptPath: options.scriptPath,
-      audioPath: options.audioPath,
-      ffprobePath: config.ffprobePath
+    // Phase 2 analysis (creates job, copies inputs, writes analysis/*)
+    const analysis = await analyzeVideo({
+      ...options,
+      logger,
+      skipDepsCheck: true,
+      createJobIfMissing: true,
+      force: options.force,
+      noCache: options.noCache,
+      debug: options.debug
     });
-    const timeline = createTimeline({ durationSec: audio.durationSec, fps: config.fps });
+    job = analysis.job;
+    const audio = analysis.audio;
+    const script = analysis.script;
+    const timelineDoc = analysis.timeline;
 
-    // 3. Job
-    job = createJob({ jobsDir: config.jobsDir });
-    logger.attachFile(path.join(job.paths.logs, 'pipeline.log'));
-    logger.info(`Job created: ${job.id}`);
-
-    const scriptCopy = path.join(job.paths.input, path.basename(script.path));
-    const audioCopy = path.join(job.paths.input, path.basename(audio.path));
-    fs.copyFileSync(script.path, scriptCopy);
-    fs.copyFileSync(audio.path, audioCopy);
-    logger.info(`Script loaded: ${script.path} (${script.bytes} bytes)`);
-    logger.info(`Audio detected: ${audio.path}`);
-    logger.info(`Audio duration: ${audio.durationSec.toFixed(2)}s`);
-    logger.info(`Audio format: ${audio.format}, ${audio.sampleRate} Hz, ${audio.channels} ch, codec ${audio.codec}`);
-    logger.info(`Timeline: ${timeline.totalFrames} frames @ ${config.fps} fps`);
-    fs.writeFileSync(path.join(job.paths.audio, 'analysis.json'), JSON.stringify(audio, null, 2));
+    const frameTimeline = createTimeline({ durationSec: audio.durationSec, fps: config.fps });
+    logger.info(`Timeline: ${frameTimeline.totalFrames} frames @ ${config.fps} fps`);
+    logger.info(`Narrative scenes: ${timelineDoc.scenes?.length || 0}, segments: ${timelineDoc.segments?.length || 0}`);
 
     const finalPath = path.join(job.paths.output, 'final.mp4');
     updateMetadata(job, {
-      jobId: job.id,
-      createdAt: job.createdAt,
-      phase: 1,
-      status: 'created',
-      scriptPath: scriptCopy,
-      audioPath: audioCopy,
-      originalScriptPath: script.path,
-      originalAudioPath: audio.path,
-      audioDurationSec: audio.durationSec,
-      audio: { format: audio.format, codec: audio.codec, sampleRate: audio.sampleRate, channels: audio.channels },
+      status: 'rendering',
       fps: config.fps,
       resolution: { width: config.width, height: config.height },
-      totalFrames: timeline.totalFrames,
+      totalFrames: frameTimeline.totalFrames,
       outputPath: finalPath,
-      error: null
+      phase: 2
     });
 
-    // 4. Scene
+    // Scene — Phase 1 basic renderer enriched with Phase 2 timeline narration
+    const title = script.sentences?.[0]?.text || 'Untitled';
+    const subtitle = script.sentences?.[1]?.text || null;
     const scene = generateScene(config.sceneName, {
       sceneDir: job.paths.scenes,
-      title: script.title,
-      subtitle: script.subtitle,
+      title: title.length > 80 ? `${title.slice(0, 79)}…` : title,
+      subtitle: subtitle ? (subtitle.length > 120 ? `${subtitle.slice(0, 119)}…` : subtitle) : null,
       durationSec: audio.durationSec,
       fps: config.fps,
       width: config.width,
-      height: config.height
+      height: config.height,
+      timeline: timelineDoc
     });
     logger.info(`Scene generated: ${path.basename(scene.sceneHtmlPath)} (${scene.name})`);
-    updateMetadata(job, { status: 'rendering', scene: { name: scene.name, path: scene.sceneHtmlPath } });
+    updateMetadata(job, { scene: { name: scene.name, path: scene.sceneHtmlPath } });
 
-    // 5. Render frames
     let t0 = Date.now();
     const rendered = await renderFrames({
       sceneHtmlPath: scene.sceneHtmlPath,
       framesDir: job.paths.frames,
-      timeline,
+      timeline: frameTimeline,
       width: config.width,
       height: config.height,
       config,
@@ -111,7 +92,6 @@ export async function generateVideo(options) {
     });
     timings.renderSec = (Date.now() - t0) / 1000;
 
-    // 6. Encode
     updateMetadata(job, { status: 'encoding' });
     logger.info('Encoding video');
     t0 = Date.now();
@@ -119,13 +99,25 @@ export async function generateVideo(options) {
     await encodeFrames({ framesDir: job.paths.frames, fps: config.fps, outputPath: silentVideo, config });
     timings.encodeSec = (Date.now() - t0) / 1000;
 
-    // 7. Merge original voiceover
     updateMetadata(job, { status: 'merging' });
     logger.info('Merging voiceover');
-    await mergeAudio({ videoPath: silentVideo, audioPath: audioCopy, audioCodec: audio.codec, outputPath: finalPath, config });
+    const mergeAudioPath =
+      audio.path ||
+      fs.readdirSync(job.paths.input)
+        .map((f) => path.join(job.paths.input, f))
+        .find((f) => /\.(mp3|wav|m4a|aac)$/i.test(f));
+    if (!mergeAudioPath) {
+      throw new VideoGenError(ErrorCodes.AUDIO_MISSING, 'Could not locate voiceover file for muxing.');
+    }
+    await mergeAudio({
+      videoPath: silentVideo,
+      audioPath: mergeAudioPath,
+      audioCodec: audio.codec,
+      outputPath: finalPath,
+      config
+    });
     fs.rmSync(silentVideo, { force: true });
 
-    // 8. Verify
     const verification = await verifyOutput({
       videoPath: finalPath,
       expected: { width: config.width, height: config.height, durationSec: audio.durationSec },
@@ -141,7 +133,13 @@ export async function generateVideo(options) {
     }
 
     timings.totalSec = (Date.now() - started) / 1000;
-    updateMetadata(job, { status: 'completed', framesRendered: rendered.framesRendered, verification, timings });
+    updateMetadata(job, {
+      status: 'completed',
+      framesRendered: rendered.framesRendered,
+      verification,
+      timings,
+      analysisCacheKey: analysis.cacheKey
+    });
 
     return {
       jobId: job.id,
@@ -151,10 +149,12 @@ export async function generateVideo(options) {
       fps: config.fps,
       width: config.width,
       height: config.height,
-      totalFrames: timeline.totalFrames,
+      totalFrames: frameTimeline.totalFrames,
       framesRendered: rendered.framesRendered,
       verification,
-      timings
+      timings,
+      timeline: timelineDoc,
+      analysisPaths: analysis.paths
     };
   } catch (err) {
     const known = err instanceof VideoGenError;

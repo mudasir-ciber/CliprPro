@@ -3,6 +3,7 @@ jobs/*
 !jobs/.gitkeep
 input/*
 !input/.gitkeep
+.cache/
 examples/demo/voiceover.mp3
 .env
 *.log

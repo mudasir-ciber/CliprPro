@@ -8,6 +8,7 @@ import { generateScene } from '../src/scenes/index.js';
 import { createTimeline, frameFileName } from '../src/pipeline/timeline.js';
 import { renderFrames } from '../src/renderer/renderer.js';
 import { loadPlaywright } from '../src/renderer/playwright.js';
+import { resolveBrowserLaunch } from '../src/renderer/browser.js';
 import { tmpDir, hasBrowser, skipUnless, config } from './helpers.js';
 
 const skip = skipUnless(hasBrowser, 'Chromium/Playwright');
@@ -20,11 +21,14 @@ function makeScene(durationSec = 4) {
 test('renderAt(time) exists and is deterministic', { skip }, async () => {
   const scene = makeScene(10);
   const { chromium } = await loadPlaywright();
-  const browser = await chromium.launch({
+  const launch = await resolveBrowserLaunch(config);
+  const launchOpts = {
     headless: true,
-    executablePath: chromium.executablePath(),
     args: config.chromiumNoSandbox ? ['--no-sandbox'] : []
-  });
+  };
+  if (launch.executablePath) launchOpts.executablePath = launch.executablePath;
+  else if (launch.channel) launchOpts.channel = launch.channel;
+  const browser = await chromium.launch(launchOpts);
   try {
     const page = await (await browser.newContext({ viewport: { width: W, height: H } })).newPage();
     const errors = [];

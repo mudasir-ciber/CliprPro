@@ -1,10 +1,9 @@
 /**
  * Verify FFmpeg, FFprobe, Playwright and Chromium BEFORE doing any work.
  */
-import fs from 'node:fs';
 import { run } from '../utils/exec.js';
 import { VideoGenError, ErrorCodes } from '../utils/errors.js';
-import { loadPlaywright } from '../renderer/playwright.js';
+import { checkBrowser as resolveCheckBrowser } from '../renderer/browser.js';
 
 async function toolVersion(command, missingCode, label) {
   let result;
@@ -35,23 +34,14 @@ export async function checkFfprobe(config) {
   return toolVersion(config.ffprobePath, ErrorCodes.FFPROBE_MISSING, 'FFprobe');
 }
 
-export async function checkBrowser() {
-  const pw = await loadPlaywright();
-  const exe = pw.chromium.executablePath();
-  if (!exe || !fs.existsSync(exe)) {
-    throw new VideoGenError(
-      ErrorCodes.CHROMIUM_MISSING,
-      'Chromium for Playwright is not installed.\nRun: npx playwright install chromium',
-      { details: `Expected at: ${exe}` }
-    );
-  }
-  return exe;
+export async function checkBrowser(config = {}) {
+  return resolveCheckBrowser(config);
 }
 
 /** @returns {Promise<{ffmpeg:string, ffprobe:string, chromium:string}>} */
 export async function checkDependencies(config) {
   const ffmpeg = await checkFfmpeg(config);
   const ffprobe = await checkFfprobe(config);
-  const chromium = await checkBrowser();
+  const chromium = await checkBrowser(config);
   return { ffmpeg, ffprobe, chromium };
 }

@@ -1,7 +1,7 @@
 {
-  "name": "opencode-video-generator",
-  "version": "0.1.0",
-  "description": "Code-driven AI video generation pipeline for OpenCode (Phase 1: foundation).",
+  "name": "cliprpro",
+  "version": "0.2.0",
+  "description": "CliprPro — local-first, code-driven AI video generation pipeline (OpenCode-ready). Phase 1 foundation + Phase 2 timeline engine.",
   "type": "module",
   "private": true,
   "engines": {
@@ -9,6 +9,10 @@
   },
   "scripts": {
     "generate": "node scripts/generate-video.js",
+    "analyze": "node scripts/analyze-video.js",
+    "render": "node scripts/render-video.js",
+    "validate-timeline": "node scripts/validate-timeline.js",
+    "debug": "node scripts/debug-video.js",
     "demo": "node scripts/demo.js",
     "check-env": "node scripts/check-env.js",
     "test": "node --test"

@@ -1,20 +1,20 @@
 ---
-description: Generate a video (final.mp4) from a script and a voiceover using the Phase 1 pipeline
+description: Analyze script+voiceover into a timeline and generate final.mp4 (Phase 1+2 pipeline)
 ---
 
-Use the `video-generation` skill to generate a video.
+Use the `video-generation` skill.
 
 User arguments: `$ARGUMENTS`
 
 Steps:
 
-1. Run `npm run check-env`. If anything fails, show the exact message and stop. Do not try to work around missing FFmpeg or Chromium.
-2. Decide the inputs:
-   - If the arguments contain `--script` / `--audio` / `--input`, pass them through unchanged.
-   - Otherwise use the default input folder: `--input input` (expects `input/script.txt` and `input/voiceover.mp3|wav|m4a|aac`).
-   - If a required file is missing, tell the user exactly which file and where to put it. Do not invent a script or audio.
+1. Run `npm run check-env`. If anything fails, show the exact message and stop.
+2. Resolve inputs:
+   - Pass through `--script` / `--audio` / `--input` / other flags from arguments.
+   - Default: `--input input` (expects `script.txt` + `voiceover.mp3|wav|m4a|aac`).
+   - If a required file is missing, tell the user exactly which file. Do not invent inputs.
 3. Run: `npm run generate -- <arguments from step 2>`
-4. If it succeeds, report: Job ID, duration, FPS, resolution, and the output path (`jobs/<job-id>/output/final.mp4`). Confirm the file exists.
-5. If it fails, report the `ERROR (CODE)` line, then read `jobs/<job-id>/logs/pipeline.log` and summarise the real cause in one or two sentences. Do not retry in a loop.
+4. On success, report Job ID, duration, FPS, resolution, timeline scene count, `jobs/<id>/output/final.mp4`, and `jobs/<id>/analysis/timeline.json`. Confirm files exist.
+5. On failure, report `ERROR (CODE)`, summarize `jobs/<id>/logs/pipeline.log`, do not retry in a loop.
 
-Rules: only use the repository pipeline; do not write a new renderer; do not claim success unless the command completed.
+Rules: only use the repository pipeline; do not claim Phase 3 AI storyboard features; do not claim success unless the command completed.

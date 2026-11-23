@@ -1,32 +1,38 @@
-# OpenCode Code-Driven Video Generator
+# CliprPro
 
-**Phase 1 — Foundation.** A local-first pipeline that turns a **script + voiceover** into an MP4.
+**Local-first, code-driven AI video generation** (OpenCode-ready).
 
-The AI does **not** generate video pixels. The system generates *executable visual code*; a browser runs it;
-frames are captured; FFmpeg builds the video.
+Not a neural text-to-video model. The system analyzes a **script + voiceover** into a validated **timeline**, renders deterministic HTML/Canvas scenes with Playwright, and muxes the **original voiceover** with FFmpeg into `final.mp4`.
 
 ```
 Script + Voiceover
-  -> input validation -> audio analysis (FFprobe) -> job folder
-  -> scene (HTML / Canvas 2D, window.renderAt(time))
-  -> Playwright + Chromium: deterministic frame capture (PNG)
-  -> FFmpeg: H.264 MP4 + ORIGINAL voiceover
-  -> jobs/<job-id>/output/final.mp4
+  → Phase 2 analysis (sentences, silence, transcript, alignment, pauses, narrative, importance)
+  → timeline.json (audio = master clock)
+  → Phase 1 scene (renderAt(time)) → PNG frames → H.264 MP4 + original voice
+  → jobs/<job-id>/output/final.mp4
 ```
 
-The voiceover duration is the **master timeline**. The original voiceover is preserved in the final MP4
-(AAC is copied untouched; MP3/WAV are converted to AAC for MP4 compatibility).
+Cursor builds this repository. **OpenCode** is the intended AI orchestrator (skills + commands included).
 
-## Requirements
+## Status
+
+| Phase | Scope | Status |
+|-------|--------|--------|
+| 1 | Foundation + deterministic render/encode | **Complete** |
+| 2 | Audio/script analysis + timeline engine | **Complete** |
+| 3+ | AI storyboard / 3D / QC / repair | Not started (interfaces only) |
+
+## Prerequisites
 
 | Tool | Notes |
 |------|-------|
 | Node.js 20+ | `node -v` |
-| FFmpeg + FFprobe | on `PATH` (Windows: `winget install Gyan.FFmpeg`, then reopen the terminal) — or set `FFMPEG_PATH` / `FFPROBE_PATH` in `.env`. Needs the `libx264` encoder (standard builds have it) |
-| Playwright + Chromium | installed by the steps below |
-| OpenCode | optional; only needed to use the `/generate-video` command |
+| FFmpeg + FFprobe | on `PATH`, or `FFMPEG_PATH` / `FFPROBE_PATH` in `.env` |
+| Playwright Chromium | `npx playwright install chromium` |
 
-## Installation (Windows PowerShell / CMD, also works on macOS/Linux)
+Windows-first. PowerShell-friendly scripts (no bash required).
+
+## Setup
 
 ```bash
 npm install
@@ -34,93 +40,92 @@ npx playwright install chromium
 npm run check-env
 ```
 
-`npm run check-env` must show `[ OK ]` for FFmpeg, FFprobe and Chromium.
-
-## Run the demo
+## Quick start
 
 ```bash
+# Demo (creates/uses examples/demo voiceover + script)
 npm run demo
+
+# Your files
+#   input/script.txt
+#   input/voiceover.mp3
+npm run generate -- --input input
+
+# Analysis only
+npm run analyze -- --input input --debug
+
+# Re-render an existing job
+npm run render -- --job jobs/job-YYYYMMDD-NNN
 ```
 
-Creates a synthetic 12-second tone as a stand-in voiceover (a test signal, not speech), runs the whole
-pipeline at 1920x1080 / 30 fps and writes `jobs/job-YYYYMMDD-001/output/final.mp4`.
+## CLI
 
-## Run with your own files
+| Command | Purpose |
+|---------|---------|
+| `npm run check-env` | Verify Node / FFmpeg / FFprobe / Chromium |
+| `npm run analyze` | Phase 2 → `analysis/timeline.json` |
+| `npm run generate` | Analyze + render + encode + mux |
+| `npm run render` | Render from existing job timeline |
+| `npm run validate-timeline` | Validate `timeline.json` |
+| `npm run debug` | Inspect job artifacts / debug analysis |
+| `npm run demo` | End-to-end sample |
+| `npm test` | Unit + integration tests |
+
+Common flags: `--script`, `--audio`, `--input`, `--fps`, `--resolution`, `--jobs-dir`, `--clean-frames`, `--force`, `--no-cache`, `--debug`, `--engine estimated|whisper`.
+
+## Input format
 
 ```
 input/
-├── script.txt         line 1 = title, line 2 = subtitle (optional)
-└── voiceover.mp3      mp3 | wav | m4a | aac
+├── script.txt      Full prose or markdown headings (Phase 2 analyzes all sentences)
+└── voiceover.mp3   mp3 | wav | m4a | aac
 ```
 
-```bash
-npm run generate -- --input input
-# or explicit paths
-npm run generate -- --script path\to\script.txt --audio path\to\voiceover.mp3
-# options
-npm run generate -- --input input --fps 30 --resolution 1280x720 --clean-frames
-```
-
-| Option | Default | Meaning |
-|--------|---------|---------|
-| `--script`, `--audio` | – | explicit file paths |
-| `--input <folder>` | `input` | folder with `script.txt` + `voiceover.*` |
-| `--fps <n>` | `30` | frames per second (1–120) |
-| `--resolution <WxH>` | `1920x1080` | even width/height, e.g. `1280x720`, `3840x2160` |
-| `--jobs-dir <folder>` | `jobs` | where job folders are created |
-| `--clean-frames` | off | delete PNG frames after success |
-
-Success prints:
-
-```
-VIDEO GENERATION COMPLETE
-
-Job ID: job-20261122-001
-Duration: 42.73 sec
-FPS: 30
-Resolution: 1920x1080
-
-Output:
-jobs\job-20261122-001\output\final.mp4
-```
-
-## Use with OpenCode
-
-Open this folder in OpenCode. It picks up:
-
-- `.opencode/skills/video-generation/SKILL.md` — teaches the agent the workflow and rules
-- `.opencode/commands/generate-video.md` — the `/generate-video` command
-
-Put `script.txt` and `voiceover.mp3` into `input/`, then run `/generate-video` (optionally with arguments such as `--fps 30`).
-
-## Output structure
+## Job output
 
 ```
 jobs/job-YYYYMMDD-NNN/
-├── input/          copies of script + voiceover
-├── audio/          analysis.json
-├── scenes/         scene.html, scene.config.json
-├── frames/         frame_000001.png ...
-├── output/         final.mp4
-├── logs/           pipeline.log
-└── metadata.json   job id, times, script/audio paths, duration, FPS, resolution, status, output path
+├── input/
+├── audio/analysis.json
+├── analysis/
+│   ├── script.json
+│   ├── audio.json
+│   ├── transcript.json
+│   ├── alignment.json
+│   ├── pauses.json
+│   ├── narrative.json
+│   ├── importance.json
+│   └── timeline.json
+├── scenes/
+├── frames/
+├── output/final.mp4
+├── logs/pipeline.log
+└── metadata.json
 ```
 
-## Repository layout
+## Transcription
+
+- **Default `estimated`:** local, no model download. Maps script sentences onto speech regions by word weight. Provenance marked `estimated`.
+- **Optional `whisper`:** `npm install` (optionalDependency `@xenova/transformers`), then `--engine whisper` or `TRANSCRIPTION_ENGINE=whisper`. First run downloads the model.
+
+## OpenCode integration
 
 ```
-.opencode/skills/video-generation/SKILL.md
-.opencode/commands/generate-video.md
-src/config.js            central configuration (+ minimal .env loader)
-src/audio/               FFprobe metadata
-src/pipeline/            checkDependencies, validateInputs, job, timeline, generateVideo, verifyOutput
-src/scenes/              scene registry + basic scene (HTML template)
-src/renderer/            Playwright frame renderer + FFmpeg encoder
-src/utils/               logger, errors, process runner
-scripts/                 generate-video.js, demo.js, check-env.js
-tests/                   node:test suite
-docs/ARCHITECTURE.md     design notes
+.opencode/
+├── skills/video-generation/SKILL.md
+└── commands/
+    ├── generate-video.md
+    ├── analyze-video.md
+    ├── render-video.md
+    ├── validate-timeline.md
+    └── debug-video.md
 ```
+
+Open this folder in OpenCode. Use `/generate-video`, `/analyze-video`, `/render-video`, etc. OpenCode should call the npm scripts above — not reimplement rendering.
+
+## Configuration
+
+Copy `.env.example` → `.env` for machine-specific paths and Phase 2 thresholds (`HOOK_WINDOW_SEC`, `ALIGNMENT_THRESHOLD`, `SILENCE_NOISE_DB`, …).
 
 ## Tests
 
@@ -128,37 +133,29 @@ docs/ARCHITECTURE.md     design notes
 npm test
 ```
 
-Covers: input validation, audio metadata, duration, frame count, scene generation, `renderAt(time)`
-(availability + determinism), frame rendering, and the full pipeline producing a final MP4.
-Tests needing FFmpeg/Chromium are **skipped** if those tools are missing — check that the summary says
-`skipped 0`. To make missing tools a failure: `set REQUIRE_E2E=1` (Windows CMD) / `$env:REQUIRE_E2E=1` (PowerShell)
-before `npm test`.
+Missing FFmpeg/Chromium skips related tests unless `REQUIRE_E2E=1`.
 
 ## Troubleshooting
 
 | Message | Fix |
 |---------|-----|
-| `FFmpeg not found` / `FFprobe not found` | Install FFmpeg, add to `PATH`, reopen terminal, or set `FFMPEG_PATH` / `FFPROBE_PATH` in `.env` |
-| `Playwright is not installed` | `npm install` |
-| `Chromium for Playwright is not installed` | `npx playwright install chromium` |
-| `Could not launch Chromium` (Linux/Docker, root) | set `CHROMIUM_NO_SANDBOX=1` in `.env` |
-| `Unsupported audio format` | use mp3, wav, m4a or aac |
-| `Invalid resolution` | width and height must be even numbers, e.g. `1920x1080` |
-| Anything else | open `jobs/<job-id>/logs/pipeline.log` (full details and stack trace) |
+| FFmpeg/FFprobe not found | Install FFmpeg; set PATH or `.env` |
+| Chromium not installed | `npx playwright install chromium` |
+| Timeline invalid | `npm run debug -- --job …` then `analyze --force` |
+| Whisper unavailable | Use `--engine estimated` or install `@xenova/transformers` |
 
-## Phase 1 limitations
+## Known limitations (Phase 2)
 
-- One built-in scene; the script only supplies the title (line 1) and subtitle (line 2).
-- No script analysis, storyboard, scene planning, or speech timing yet.
-- Canvas 2D only (no SVG/GSAP/Three.js/WebGL yet).
-- Frames are captured with `page.screenshot` — correct but not fast. Measured in a Linux sandbox:
-  about 0.22 s per 1080p frame (a 12 s video took ~80 s to render). Long videos will be slow until Phase 9.
-- PNG frames are kept by default for inspection (1080p ≈ 100–300 KB each). Use `--clean-frames` for long videos.
-- Fonts come from the machine (Segoe UI on Windows). Output is deterministic on one machine; text may look slightly different on another.
-- No quality control, no automatic repair, no retries.
-- Tested on Linux only so far; Windows testing is the next step (see Antigravity checklist).
+- Basic Canvas scene only (timeline-aware narration text — not AI storyboards).
+- Default transcription is estimated unless Whisper is configured.
+- Narrative roles are **heuristics**, not LLM classification.
+- Per-frame Playwright screenshots are correct but slow on long videos.
+- Fonts depend on the host OS (Segoe UI on Windows).
 
 ## Roadmap
 
-1. Foundation (this phase) · 2. Audio + timeline engine · 3. AI storyboard + scene planner · 4. 2D visual generation ·
-5. 3D (Three.js/WebGL) · 6. Cinematic system · 7. Visual QC · 8. Self-correction · 9. Long-form + reliability · 10. Production release
+1. Foundation ✓ · 2. Timeline engine ✓ · 3. AI storyboard · 4. Advanced 2D · 5. Three.js/WebGL · 6. Cinematic · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
+
+## License
+
+Private project (`private: true` in package.json).

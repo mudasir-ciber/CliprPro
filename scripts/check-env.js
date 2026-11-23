@@ -7,7 +7,7 @@ const config = getConfig();
 const checks = [
   ['FFmpeg', () => checkFfmpeg(config)],
   ['FFprobe', () => checkFfprobe(config)],
-  ['Chromium (Playwright)', () => checkBrowser()]
+  ['Chromium/Chrome', () => checkBrowser(config)]
 ];
 
 let failed = false;

@@ -1,6 +1,6 @@
 /**
- * Centralized configuration for Phase 1.
- * Values come from (in priority order): function overrides, process env, .env file, defaults.
+ * Centralized configuration for Phase 1 + Phase 2.
+ * Priority: function overrides → process env → .env file → defaults.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +16,16 @@ export const DEFAULTS = Object.freeze({
   width: 1920,
   height: 1080,
   sceneName: 'basic',
-  jobsDirName: 'jobs'
+  jobsDirName: 'jobs',
+  transcriptionEngine: 'estimated',
+  transcriptionLanguage: 'en',
+  hookWindowSec: 15,
+  alignmentThreshold: 0.45,
+  silenceNoiseDb: -30,
+  minSilenceSec: 0.25,
+  pauseShortMax: 0.4,
+  pauseMediumMax: 1.0,
+  pauseMinGap: 0.2
 });
 
 /** Minimal .env loader (no dependency). Does not override variables already set. */
@@ -39,6 +48,13 @@ function loadDotEnv(file) {
 
 loadDotEnv(path.join(PROJECT_ROOT, '.env'));
 
+function envNumber(name, fallback) {
+  const v = process.env[name];
+  if (v === undefined || v === '') return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 /** Parse "1920x1080" -> { width, height }. */
 export function parseResolution(text) {
   const m = /^(\d{2,5})\s*[xX]\s*(\d{2,5})$/.exec(String(text).trim());
@@ -50,7 +66,6 @@ export function parseResolution(text) {
 
 /**
  * Build a validated config object.
- * @param {object} overrides { fps, width, height, resolution, jobsDir, keepFrames, ffmpegPath, ffprobePath }
  */
 export function getConfig(overrides = {}) {
   let { width, height } = DEFAULTS;
@@ -72,6 +87,12 @@ export function getConfig(overrides = {}) {
   const jobsDirRaw = overrides.jobsDir || process.env.JOBS_DIR || DEFAULTS.jobsDirName;
   const jobsDir = path.isAbsolute(jobsDirRaw) ? jobsDirRaw : path.resolve(process.cwd(), jobsDirRaw);
 
+  const transcriptionEngine = (
+    overrides.transcriptionEngine ||
+    process.env.TRANSCRIPTION_ENGINE ||
+    DEFAULTS.transcriptionEngine
+  ).toLowerCase();
+
   return {
     fps,
     width,
@@ -81,6 +102,18 @@ export function getConfig(overrides = {}) {
     keepFrames: overrides.keepFrames !== undefined ? Boolean(overrides.keepFrames) : true,
     ffmpegPath: overrides.ffmpegPath || process.env.FFMPEG_PATH || 'ffmpeg',
     ffprobePath: overrides.ffprobePath || process.env.FFPROBE_PATH || 'ffprobe',
-    chromiumNoSandbox: process.env.CHROMIUM_NO_SANDBOX === '1'
+    chromiumNoSandbox: process.env.CHROMIUM_NO_SANDBOX === '1',
+    chromiumPath: overrides.chromiumPath || process.env.CHROMIUM_PATH || process.env.CHROME_PATH || null,
+    debug: overrides.debug !== undefined ? Boolean(overrides.debug) : process.env.DEBUG === '1',
+    transcriptionEngine,
+    transcriptionLanguage:
+      overrides.transcriptionLanguage || process.env.TRANSCRIPTION_LANGUAGE || DEFAULTS.transcriptionLanguage,
+    hookWindowSec: overrides.hookWindowSec ?? envNumber('HOOK_WINDOW_SEC', DEFAULTS.hookWindowSec),
+    alignmentThreshold: overrides.alignmentThreshold ?? envNumber('ALIGNMENT_THRESHOLD', DEFAULTS.alignmentThreshold),
+    silenceNoiseDb: overrides.silenceNoiseDb ?? envNumber('SILENCE_NOISE_DB', DEFAULTS.silenceNoiseDb),
+    minSilenceSec: overrides.minSilenceSec ?? envNumber('MIN_SILENCE_SEC', DEFAULTS.minSilenceSec),
+    pauseShortMax: overrides.pauseShortMax ?? envNumber('PAUSE_SHORT_MAX', DEFAULTS.pauseShortMax),
+    pauseMediumMax: overrides.pauseMediumMax ?? envNumber('PAUSE_MEDIUM_MAX', DEFAULTS.pauseMediumMax),
+    pauseMinGap: overrides.pauseMinGap ?? envNumber('PAUSE_MIN_GAP', DEFAULTS.pauseMinGap)
   };
 }

@@ -1,5 +1,13 @@
-Phase 1 Demo: Code-Driven Video
-A deterministic Canvas scene rendered frame by frame
+# CliprPro Phase 2 Demo
 
-This script is only used for the title and subtitle in Phase 1.
-Later phases will analyse the full text and plan scenes automatically.
+What if a video engine could understand your script and your voice?
+
+CliprPro starts with a simple idea: the AI does not paint pixels. It builds timed scenes from narration.
+
+First the system listens to the voiceover and maps every sentence onto the audio timeline.
+
+Then it detects pauses, finds the hook, and scores what matters most.
+
+Finally it renders a deterministic Canvas scene and merges your original voice into a playable MP4.
+
+Remember: Phase 3 will add AI storyboards. Today the timeline is the contract that makes that possible.

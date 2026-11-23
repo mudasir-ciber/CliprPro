@@ -7,6 +7,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadPlaywright } from './playwright.js';
+import { resolveBrowserLaunch } from './browser.js';
 import { frameFileName, frameTime } from '../pipeline/timeline.js';
 import { VideoGenError, ErrorCodes } from '../utils/errors.js';
 
@@ -29,19 +30,22 @@ export async function renderFrames({ sceneHtmlPath, framesDir, timeline, width, 
 
   let browser;
   try {
-    browser = await chromium.launch({
+    const launch = await resolveBrowserLaunch(config || {});
+    const launchOpts = {
       headless: true,
-      executablePath: config?.chromiumPath || chromium.executablePath(),
       args: config?.chromiumNoSandbox ? ['--no-sandbox', '--disable-setuid-sandbox'] : []
-    });
+    };
+    if (launch.executablePath) launchOpts.executablePath = launch.executablePath;
+    else if (launch.channel) launchOpts.channel = launch.channel;
+    browser = await chromium.launch(launchOpts);
+    logger?.info(`Browser launched (${launch.label})`);
   } catch (err) {
     throw new VideoGenError(
       ErrorCodes.CHROMIUM_MISSING,
-      'Could not launch Chromium. Run: npx playwright install chromium',
+      'Could not launch Chromium/Chrome. Run: npx playwright install chromium\nOr install Google Chrome / set CHROMIUM_PATH in .env.',
       { cause: err, details: String(err.message || err) }
     );
   }
-  logger?.info('Browser launched');
 
   try {
     const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
