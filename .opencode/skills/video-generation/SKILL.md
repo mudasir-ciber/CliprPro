@@ -1,9 +1,9 @@
 ---
 name: video-generation
-description: Operate CliprPro — local-first code-driven video pipeline. Analyze script+voiceover into a timeline, plan a storyboard with Phase 4–6 visual intents (motif/transition/typography/fx + cinematic camera), render deterministic Canvas or Three.js frames with Playwright, encode with FFmpeg, mux original voiceover. Use when the user asks to generate, analyze, storyboard, render, validate, or debug a video.
+description: Operate CliprPro — local-first code-driven video pipeline. Analyze script+voiceover into a timeline, plan a storyboard with Phase 4–6 visual intents (motif/transition/typography/fx + cinematic camera), render deterministic Canvas or Three.js frames with Playwright, run Phase 7 visual QC, encode with FFmpeg, mux original voiceover. Use when the user asks to generate, analyze, storyboard, render, qc, validate, or debug a video.
 ---
 
-# CliprPro Video Generation Skill (Phases 1–6)
+# CliprPro Video Generation Skill (Phases 1–7)
 
 ## Purpose
 
@@ -15,7 +15,9 @@ script + voiceover
   → Phase 2 analysis → timeline.json
   → Phase 3 storyboard → storyboard.json (visualIntent per scene)
   → HTML/Canvas or Three.js scene (renderAt(time))
-  → Playwright PNGs → FFmpeg H.264 + ORIGINAL voiceover
+  → Playwright PNGs
+  → Phase 7 visual QC → qc.json
+  → FFmpeg H.264 + ORIGINAL voiceover
   → final.mp4
 ```
 
@@ -30,10 +32,11 @@ Audio duration is the **master clock**.
 - Phase 4: advanced 2D motifs/transitions/typography/fx on the `storyboard` Canvas scene
 - Phase 5: deterministic Three.js/WebGL scene via `--scene threejs`
 - Phase 6: cinematic camera moves (`dolly-in/out`, `orbit-*`, `crane-*`, `handheld`, `push-slide`, `whip-pan`) on storyboard + threejs
-- OpenCode commands for generate / analyze / storyboard / render / validate / debug
+- Phase 7: visual QC on rendered frames (integrity, black/freeze, shot coverage, contact sheet)
+- OpenCode commands for generate / analyze / storyboard / render / qc / validate / debug
 
-**NOT implemented yet (Phase 7+):**
-- Visual QC / auto-repair
+**NOT implemented yet (Phase 8+):**
+- Self-repair / auto-fix loops
 - Long-form performance overhaul
 
 ## Prerequisites
@@ -52,6 +55,7 @@ npm run analyze -- --input input
 npm run storyboard -- --job jobs/<id> [--planner heuristic|llm|auto]
 npm run generate -- --input input [--planner heuristic] [--scene storyboard]
 npm run render -- --job jobs/<id>
+npm run qc -- --job jobs/<id> [--qc-strict]
 npm run validate-timeline -- --file jobs/<id>/analysis/timeline.json
 npm run debug -- --job jobs/<id>
 npm run demo
@@ -62,9 +66,9 @@ npm test
 
 1. `npm run check-env`
 2. Confirm script + voiceover inputs
-3. Prefer: `npm run generate -- --input input` (analyze + storyboard + render)
-4. Or staged: `analyze` → `storyboard` → `render`
-5. Report Job ID, `output/final.mp4`, `analysis/timeline.json`, `analysis/storyboard.json`, camera moves summary
+3. Prefer: `npm run generate -- --input input` (analyze + storyboard + render + QC)
+4. Or staged: `analyze` → `storyboard` → `render` → `qc` (if frames kept)
+5. Report Job ID, `output/final.mp4`, `analysis/timeline.json`, `analysis/storyboard.json`, `analysis/qc.json`
 6. On failure: `ERROR (CODE)` + summarize `logs/pipeline.log` once
 
 ## Storyboard planners
@@ -78,6 +82,13 @@ npm test
 OpenCode may also author a storyboard JSON and apply with `--storyboard path.json`.
 Camera fields live on `shots[].visualIntent.camera`.
 
+## Visual QC
+
+Runs automatically after frame render unless `--skip-qc`.
+Writes `analysis/qc.json`. Hard issues → `QC_FAILED` (encode blocked).
+`--qc-strict` treats warnings as failures.
+Standalone: `npm run qc -- --job …` (requires frames still on disk).
+
 ## Job layout
 
 ```
@@ -85,8 +96,11 @@ jobs/job-…/
 ├── analysis/
 │   ├── timeline.json
 │   ├── storyboard.json    # Phase 3–6 visualIntent + camera
+│   ├── qc.json            # Phase 7
+│   ├── qc-contact.png     # optional contact sheet
 │   └── …
 ├── scenes/scene.html
+├── frames/                # may be cleaned with --clean-frames
 ├── output/final.mp4
 └── metadata.json
 ```
@@ -103,5 +117,6 @@ Camera evaluation is a pure function of shot progress + absolute time (handheld 
 |-------|--------|
 | Missing FFmpeg/Chrome | Install / PATH / `CHROMIUM_PATH` |
 | STORYBOARD_UNAVAILABLE | Use `--planner heuristic` |
+| QC_FAILED | Read `analysis/qc.json`; re-render (no auto-repair yet) |
 | Bad timeline | `debug` then `analyze --recompute` |
 | Re-render only | `npm run render -- --job …` |

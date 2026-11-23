@@ -1,5 +1,5 @@
 ---
-description: Analyze + storyboard + generate final.mp4 (Phases 1–6)
+description: Analyze + storyboard + generate final.mp4 (Phases 1–7)
 ---
 
 Use the `video-generation` skill.
@@ -15,7 +15,8 @@ Steps:
    - Pass `--planner llm` only if the user requests LLM planning and keys exist.
    - Pass `--skip-storyboard` only if the user wants Phase 2 visuals only.
    - Pass `--scene threejs` for Phase 5 WebGL + Phase 6 camera (default is `storyboard` Canvas 2D).
-4. On success report Job ID, duration, FPS, resolution, storyboard shot count/planner, camera moves, `output/final.mp4`, `analysis/timeline.json`, `analysis/storyboard.json`.
+   - Phase 7 visual QC runs by default after frames; use `--skip-qc` only if requested; `--qc-strict` promotes warnings.
+4. On success report Job ID, duration, FPS, resolution, storyboard shot count/planner, camera moves, QC pass/fail, `output/final.mp4`, `analysis/timeline.json`, `analysis/storyboard.json`, `analysis/qc.json`.
 5. On failure report `ERROR (CODE)` and summarize `logs/pipeline.log` once.
 
-Rules: use repository pipeline only; do not claim Phase 7+ features.
+Rules: use repository pipeline only; do not claim Phase 8+ features.

@@ -24,7 +24,8 @@ Cursor builds this repository. **OpenCode** is the intended AI orchestrator (ski
 | 4 | Advanced 2D (motifs, transitions, typography, FX) | **Complete** |
 | 5 | Three.js / WebGL deterministic 3D scene | **Complete** |
 | 6 | Cinematic camera moves (dolly/orbit/crane/handheld) | **Complete** |
-| 7+ | Visual QC / auto-repair / long-form | Not started |
+| 7 | Visual QC (frame integrity, black/freeze, contact sheet) | **Complete** |
+| 8+ | Self-repair / long-form | Not started |
 
 ## Prerequisites
 
@@ -72,14 +73,15 @@ npm run render -- --job jobs/job-YYYYMMDD-NNN
 | `npm run check-env` | Verify Node / FFmpeg / FFprobe / Chromium |
 | `npm run analyze` | Phase 2 → `analysis/timeline.json` |
 | `npm run storyboard` | Phase 3 → `analysis/storyboard.json` |
-| `npm run generate` | Analyze + storyboard + render + encode + mux |
+| `npm run generate` | Analyze + storyboard + render + QC + encode + mux |
 | `npm run render` | Render from existing job timeline/storyboard |
+| `npm run qc` | Phase 7 visual QC on existing `frames/` |
 | `npm run validate-timeline` | Validate `timeline.json` |
 | `npm run debug` | Inspect job artifacts / debug analysis |
 | `npm run demo` | End-to-end sample |
 | `npm test` | Unit + integration tests |
 
-Common flags: `--script`, `--audio`, `--input`, `--fps`, `--resolution`, `--jobs-dir`, `--clean-frames`, `--recompute`, `--no-cache`, `--debug`, `--engine estimated|whisper`, `--planner heuristic|llm|auto`, `--scene storyboard|threejs|basic`, `--skip-storyboard`.
+Common flags: `--script`, `--audio`, `--input`, `--fps`, `--resolution`, `--jobs-dir`, `--clean-frames`, `--recompute`, `--no-cache`, `--debug`, `--engine estimated|whisper`, `--planner heuristic|llm|auto`, `--scene storyboard|threejs|basic`, `--skip-storyboard`, `--skip-qc`, `--qc-strict`.
 
 ### Phase 5 Three.js
 
@@ -92,6 +94,18 @@ Uses a local `three` build copied into the job `scenes/vendor/` folder (works wi
 ### Phase 6 cinematic camera
 
 Heuristic (and LLM) storyboards set `visualIntent.camera` per shot (`move`, `ease`, `intensity`, `zoom`/`pan`/`roll`/`fov`). Both `storyboard` and `threejs` scenes evaluate moves over shot-local progress — dolly, orbit, crane, handheld, push-slide, whip-pan. Explicit `camera.from` / `camera.to` keyframes override procedural moves.
+
+### Phase 7 visual QC
+
+After frames render (before encode), CliprPro samples PNGs and writes `analysis/qc.json` (+ `qc-contact.png`):
+
+- missing / tiny frames
+- resolution mismatch
+- near-black / low-variance samples
+- frozen streak across samples
+- shot midpoint coverage
+
+Hard failures throw `QC_FAILED` (block encode). Use `--skip-qc` to bypass, `--qc-strict` to promote warnings to failures.
 
 ## Input format
 
@@ -201,7 +215,7 @@ Presets live in `src/visuals2d/presets.js` and are applied by the heuristic plan
 
 ## Roadmap
 
-1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D ✓ · 5. Three.js/WebGL ✓ · 6. Cinematic ✓ · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
+1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D ✓ · 5. Three.js/WebGL ✓ · 6. Cinematic ✓ · 7. Visual QC ✓ · 8. Self-repair · 9. Long-form · 10. Production
 
 ## License
 

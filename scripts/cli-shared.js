@@ -22,6 +22,8 @@ export function baseOptions() {
     storyboard: { type: 'string' },
     scene: { type: 'string' },
     'skip-storyboard': { type: 'boolean', default: false },
+    'skip-qc': { type: 'boolean', default: false },
+    'qc-strict': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false }
   };
 }

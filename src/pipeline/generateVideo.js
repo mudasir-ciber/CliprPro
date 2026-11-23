@@ -1,11 +1,13 @@
 /**
- * Full pipeline orchestrator (Phase 1–3).
+ * Full pipeline orchestrator (Phases 1–7).
  *
  * Script + Voiceover
  *   -> Phase 2 analysis (timeline.json)
  *   -> Phase 3 storyboard (visualIntent per scene)
  *   -> deterministic scene renderAt(time)
- *   -> Playwright frames -> FFmpeg encode -> original voiceover -> final.mp4
+ *   -> Playwright frames
+ *   -> Phase 7 visual QC (qc.json)
+ *   -> FFmpeg encode -> original voiceover -> final.mp4
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,6 +23,7 @@ import { verifyOutput } from './verifyOutput.js';
 import { updateMetadata } from './job.js';
 import { analyzeVideo } from './analyzeVideo.js';
 import { planStoryboardForJob } from './planStoryboard.js';
+import { runVisualQc } from '../qc/runQc.js';
 
 /**
  * @param {object} options
@@ -115,6 +118,28 @@ export async function generateVideo(options) {
     });
     timings.renderSec = (Date.now() - t0) / 1000;
 
+    let qc = null;
+    if (!config.skipQc) {
+      updateMetadata(job, { status: 'qc' });
+      logger.info('Running visual QC');
+      t0 = Date.now();
+      qc = await runVisualQc({
+        framesDir: job.paths.frames,
+        timeline: frameTimeline,
+        width: config.width,
+        height: config.height,
+        config,
+        storyboard,
+        timelineDoc,
+        outDir: job.paths.analysis,
+        logger
+      });
+      timings.qcSec = (Date.now() - t0) / 1000;
+      updateMetadata(job, { qc: { passed: qc.passed, path: qc.path, summary: qc.summary } });
+    } else {
+      logger.info('Visual QC skipped');
+    }
+
     updateMetadata(job, { status: 'encoding' });
     logger.info('Encoding video');
     t0 = Date.now();
@@ -160,9 +185,10 @@ export async function generateVideo(options) {
       status: 'completed',
       framesRendered: rendered.framesRendered,
       verification,
+      qc: qc ? { passed: qc.passed, path: qc.path, summary: qc.summary } : null,
       timings,
       analysisCacheKey: analysis.cacheKey,
-      phase: storyboard ? 3 : 2
+      phase: qc ? 7 : storyboard ? 6 : 2
     });
 
     return {
@@ -176,12 +202,14 @@ export async function generateVideo(options) {
       totalFrames: frameTimeline.totalFrames,
       framesRendered: rendered.framesRendered,
       verification,
+      qc,
       timings,
       timeline: timelineDoc,
       storyboard,
       analysisPaths: {
         ...analysis.paths,
-        storyboard: storyboard ? path.join(job.paths.analysis, 'storyboard.json') : null
+        storyboard: storyboard ? path.join(job.paths.analysis, 'storyboard.json') : null,
+        qc: qc?.path || null
       }
     };
   } catch (err) {

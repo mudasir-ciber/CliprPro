@@ -15,11 +15,12 @@ import { encodeFrames, mergeAudio } from '../src/renderer/encoder.js';
 import { verifyOutput } from '../src/pipeline/verifyOutput.js';
 import { updateMetadata } from '../src/pipeline/job.js';
 import { checkDependencies } from '../src/pipeline/checkDependencies.js';
+import { runVisualQc } from '../src/qc/runQc.js';
 import { VideoGenError, ErrorCodes } from '../src/utils/errors.js';
 import { fail, printRel } from './cli-shared.js';
 
 const USAGE = `Usage:
-  npm run render -- --job jobs/<job-id> [--fps 30] [--resolution 1920x1080] [--clean-frames]`;
+  npm run render -- --job jobs/<job-id> [--fps 30] [--resolution 1920x1080] [--clean-frames] [--skip-qc] [--qc-strict]`;
 
 let values;
 try {
@@ -29,6 +30,8 @@ try {
       fps: { type: 'string' },
       resolution: { type: 'string' },
       'clean-frames': { type: 'boolean', default: false },
+      'skip-qc': { type: 'boolean', default: false },
+      'qc-strict': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false }
     }
   }));
@@ -63,7 +66,9 @@ try {
     fps: values.fps,
     resolution: values.resolution,
     keepFrames: !values['clean-frames'],
-    sceneName: storyboard ? 'storyboard' : undefined
+    sceneName: storyboard ? 'storyboard' : undefined,
+    skipQc: values['skip-qc'],
+    qcStrict: values['qc-strict']
   });
   const logger = createLogger();
   logger.attachFile(path.join(jobDir, 'logs', 'pipeline.log'));
@@ -114,6 +119,23 @@ try {
     logger
   });
 
+  let qc = null;
+  if (!config.skipQc) {
+    updateMetadata(job, { status: 'qc' });
+    logger.info('Running visual QC');
+    qc = await runVisualQc({
+      framesDir: job.paths.frames,
+      timeline: frameTimeline,
+      width: config.width,
+      height: config.height,
+      config,
+      storyboard,
+      timelineDoc,
+      outDir: job.paths.analysis,
+      logger
+    });
+  }
+
   const silentVideo = path.join(job.paths.output, 'video_silent.mp4');
   const finalPath = path.join(job.paths.output, 'final.mp4');
   updateMetadata(job, { status: 'encoding' });
@@ -137,8 +159,15 @@ try {
     fs.rmSync(job.paths.frames, { recursive: true, force: true });
     fs.mkdirSync(job.paths.frames);
   }
-  updateMetadata(job, { status: 'completed', verification, outputPath: finalPath });
-  console.log(`\nRENDER COMPLETE\nOutput:\n${printRel(finalPath)}\n`);
+  updateMetadata(job, {
+    status: 'completed',
+    verification,
+    qc: qc ? { passed: qc.passed, path: qc.path, summary: qc.summary } : null,
+    outputPath: finalPath
+  });
+  console.log(
+    `\nRENDER COMPLETE\nOutput:\n${printRel(finalPath)}\nVisual QC: ${qc ? (qc.passed ? 'passed' : 'failed') : '(skipped)'}\n`
+  );
 } catch (err) {
   fail(err);
 }

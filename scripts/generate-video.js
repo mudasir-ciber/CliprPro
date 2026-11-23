@@ -22,6 +22,8 @@ Options:
   --storyboard <file>    apply an existing storyboard.json
   --scene <name>         storyboard (default) | threejs | basic
   --skip-storyboard      Phase 2 timeline only (skip Phase 3)
+  --skip-qc              Skip Phase 7 visual QC
+  --qc-strict            Treat QC warnings as failures
   -h, --help`;
 
 const values = parseCli();
@@ -51,7 +53,9 @@ try {
     planner: values.planner,
     storyboardPath: values.storyboard,
     sceneName: values.scene,
-    skipStoryboard: values['skip-storyboard']
+    skipStoryboard: values['skip-storyboard'],
+    skipQc: values['skip-qc'],
+    qcStrict: values['qc-strict']
   });
 
   console.log(`
@@ -65,13 +69,14 @@ Timeline scenes: ${result.timeline?.scenes?.length ?? 0}
 Storyboard shots: ${result.storyboard?.shots?.length ?? 0}
 Planner: ${result.storyboard?.planner ?? '(skipped)'}
 Timeline valid: ${result.timeline?.validation?.valid}
+Visual QC: ${result.qc ? (result.qc.passed ? 'passed' : 'failed') : '(skipped)'}
 
 Output:
 ${printRel(result.outputPath)}
 
 Timeline:
 ${printRel(result.analysisPaths.timeline)}
-${result.analysisPaths.storyboard ? `Storyboard:\n${printRel(result.analysisPaths.storyboard)}\n` : ''}`);
+${result.analysisPaths.storyboard ? `Storyboard:\n${printRel(result.analysisPaths.storyboard)}\n` : ''}${result.analysisPaths.qc ? `QC:\n${printRel(result.analysisPaths.qc)}\n` : ''}`);
 } catch (err) {
   fail(err);
 }

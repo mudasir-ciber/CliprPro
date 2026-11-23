@@ -1,7 +1,7 @@
 {
   "name": "cliprpro",
-  "version": "0.6.0",
-  "description": "CliprPro — local-first, code-driven AI video generation pipeline (OpenCode-ready). Phases 1–6: foundation through cinematic camera.",
+  "version": "0.7.0",
+  "description": "CliprPro — local-first, code-driven AI video generation pipeline (OpenCode-ready). Phases 1–7: foundation through visual QC.",
   "type": "module",
   "private": true,
   "engines": {
@@ -12,6 +12,7 @@
     "analyze": "node scripts/analyze-video.js",
     "storyboard": "node scripts/storyboard-video.js",
     "render": "node scripts/render-video.js",
+    "qc": "node scripts/qc-video.js",
     "validate-timeline": "node scripts/validate-timeline.js",
     "debug": "node scripts/debug-video.js",
     "demo": "node scripts/demo.js",

@@ -1,4 +1,4 @@
-# Architecture (Phases 1–6)
+# Architecture (Phases 1–7)
 
 ## Data flow
 
@@ -17,9 +17,10 @@ src/pipeline/planStoryboard.js        (Phase 3)
   → timeline.scenes[].visualIntent = storyboard shot
         │
         ▼
-src/pipeline/generateVideo.js         (Phase 1 render)
-  → scenes/storyboard (or basic)
+src/pipeline/generateVideo.js
+  → scenes/storyboard | threejs | basic
   → Playwright renderAt(t) → PNG
+  → Phase 7 visual QC → analysis/qc.json (+ contact sheet)
   → FFmpeg encode + original voiceover
   → verifyOutput
 ```
@@ -30,6 +31,7 @@ src/pipeline/generateVideo.js         (Phase 1 render)
 - `timeline.json` v2.0 bridges analysis and visuals.
 - Phase 3–6 `visualIntent.type = "storyboard"` (mood, layout, motion, motif, transition, typography, fx, palette, visualPrompt, camera).
 - Phase 6 `camera`: `{ move, ease, intensity, zoom, panX, panY, roll, fov, from?, to? }` evaluated in scene templates via shot-local progress.
+- Phase 7 `qc.json`: sampled frame stats + issues (`error` | `warning`); hard errors block encode (`QC_FAILED`).
 - `window.renderAt(time)` is a pure function of time.
 
 ## Modules
@@ -41,14 +43,15 @@ src/pipeline/generateVideo.js         (Phase 1 render)
 | Storyboard | `src/storyboard/` |
 | Advanced 2D presets | `src/visuals2d/` |
 | Cinematic camera | `src/cinematic/` |
+| Visual QC | `src/qc/` |
 | Scenes | `src/scenes/basic`, `storyboard`, `threejs` |
 | Render / encode | `src/renderer/` |
 
 ## OpenCode
 
 Skills/commands under `.opencode/` orchestrate via `npm run …`.
-OpenCode can plan shots (or supply JSON); the renderer executes them.
+OpenCode can plan shots (or supply JSON); the renderer executes them; QC gates bad frames.
 
 ## Phase boundary
 
-Phase 7+ (visual QC, auto-repair, long-form) is out of scope until requested.
+Phase 8+ (self-repair / auto-fix loops, long-form) is out of scope until requested.

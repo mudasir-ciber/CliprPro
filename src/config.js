@@ -1,5 +1,5 @@
 /**
- * Centralized configuration for Phase 1–3.
+ * Centralized configuration for Phases 1–7.
  * Priority: function overrides → process env → .env file → defaults.
  */
 import fs from 'node:fs';
@@ -26,7 +26,13 @@ export const DEFAULTS = Object.freeze({
   pauseShortMax: 0.4,
   pauseMediumMax: 1.0,
   pauseMinGap: 0.2,
-  storyboardPlanner: 'heuristic'
+  storyboardPlanner: 'heuristic',
+  qcMaxSamples: 24,
+  qcBlackLuma: 12,
+  qcLowVariance: 40,
+  qcContactSheet: true,
+  qcFailOnError: true,
+  qcStrict: false
 });
 
 /** Minimal .env loader (no dependency). Does not override variables already set. */
@@ -124,6 +130,19 @@ export function getConfig(overrides = {}) {
     storyboardApiKey: overrides.storyboardApiKey || process.env.STORYBOARD_API_KEY || process.env.OPENAI_API_KEY || null,
     storyboardApiUrl: overrides.storyboardApiUrl || process.env.STORYBOARD_API_URL || null,
     storyboardModel: overrides.storyboardModel || process.env.STORYBOARD_MODEL || 'gpt-4o-mini',
-    skipStoryboard: overrides.skipStoryboard === true || process.env.SKIP_STORYBOARD === '1'
+    skipStoryboard: overrides.skipStoryboard === true || process.env.SKIP_STORYBOARD === '1',
+    skipQc: overrides.skipQc === true || process.env.SKIP_QC === '1',
+    qcStrict: overrides.qcStrict === true || process.env.QC_STRICT === '1',
+    qcFailOnError:
+      overrides.qcFailOnError !== undefined
+        ? Boolean(overrides.qcFailOnError)
+        : process.env.QC_FAIL_ON_ERROR !== '0',
+    qcMaxSamples: overrides.qcMaxSamples ?? envNumber('QC_MAX_SAMPLES', DEFAULTS.qcMaxSamples),
+    qcBlackLuma: overrides.qcBlackLuma ?? envNumber('QC_BLACK_LUMA', DEFAULTS.qcBlackLuma),
+    qcLowVariance: overrides.qcLowVariance ?? envNumber('QC_LOW_VARIANCE', DEFAULTS.qcLowVariance),
+    qcContactSheet:
+      overrides.qcContactSheet !== undefined
+        ? Boolean(overrides.qcContactSheet)
+        : process.env.QC_CONTACT_SHEET !== '0'
   };
 }
