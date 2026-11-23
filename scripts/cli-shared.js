@@ -24,6 +24,8 @@ export function baseOptions() {
     'skip-storyboard': { type: 'boolean', default: false },
     'skip-qc': { type: 'boolean', default: false },
     'qc-strict': { type: 'boolean', default: false },
+    'skip-repair': { type: 'boolean', default: false },
+    'repair-attempts': { type: 'string' },
     help: { type: 'boolean', short: 'h', default: false }
   };
 }

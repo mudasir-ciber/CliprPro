@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Render from an existing analyzed job (timeline already present).
- * Reuses job analysis artifacts and re-runs scene → frames → encode → mux.
+ * Reuses job analysis artifacts and re-runs scene → frames → QC/repair → encode → mux.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,18 +9,16 @@ import { parseArgs } from 'node:util';
 import { getConfig } from '../src/config.js';
 import { createLogger } from '../src/utils/logger.js';
 import { createTimeline } from '../src/pipeline/timeline.js';
-import { generateScene } from '../src/scenes/index.js';
-import { renderFrames } from '../src/renderer/renderer.js';
 import { encodeFrames, mergeAudio } from '../src/renderer/encoder.js';
 import { verifyOutput } from '../src/pipeline/verifyOutput.js';
 import { updateMetadata } from '../src/pipeline/job.js';
 import { checkDependencies } from '../src/pipeline/checkDependencies.js';
-import { runVisualQc } from '../src/qc/runQc.js';
+import { renderWithSelfRepair } from '../src/repair/loop.js';
 import { VideoGenError, ErrorCodes } from '../src/utils/errors.js';
 import { fail, printRel } from './cli-shared.js';
 
 const USAGE = `Usage:
-  npm run render -- --job jobs/<job-id> [--fps 30] [--resolution 1920x1080] [--clean-frames] [--skip-qc] [--qc-strict]`;
+  npm run render -- --job jobs/<job-id> [--fps 30] [--resolution 1920x1080] [--clean-frames] [--skip-qc] [--qc-strict] [--skip-repair] [--repair-attempts n]`;
 
 let values;
 try {
@@ -32,6 +30,8 @@ try {
       'clean-frames': { type: 'boolean', default: false },
       'skip-qc': { type: 'boolean', default: false },
       'qc-strict': { type: 'boolean', default: false },
+      'skip-repair': { type: 'boolean', default: false },
+      'repair-attempts': { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false }
     }
   }));
@@ -54,11 +54,14 @@ try {
   if (!fs.existsSync(metadataPath)) throw new VideoGenError(ErrorCodes.ANALYSIS_FAILED, `Missing metadata: ${metadataPath}`);
 
   const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
-  const timelineDoc = JSON.parse(fs.readFileSync(timelinePath, 'utf8'));
+  let timelineDoc = JSON.parse(fs.readFileSync(timelinePath, 'utf8'));
   const script = JSON.parse(fs.readFileSync(scriptPath, 'utf8'));
   const storyboardPath = path.join(jobDir, 'analysis', 'storyboard.json');
-  const storyboard = fs.existsSync(storyboardPath) ? JSON.parse(fs.readFileSync(storyboardPath, 'utf8')) : null;
-  const audioFile = fs.readdirSync(path.join(jobDir, 'input')).map((f) => path.join(jobDir, 'input', f)).find((f) => /\.(mp3|wav|m4a|aac)$/i.test(f));
+  let storyboard = fs.existsSync(storyboardPath) ? JSON.parse(fs.readFileSync(storyboardPath, 'utf8')) : null;
+  const audioFile = fs
+    .readdirSync(path.join(jobDir, 'input'))
+    .map((f) => path.join(jobDir, 'input', f))
+    .find((f) => /\.(mp3|wav|m4a|aac)$/i.test(f));
   if (!audioFile) throw new VideoGenError(ErrorCodes.AUDIO_MISSING, 'No voiceover in job input/');
 
   const audioJson = JSON.parse(fs.readFileSync(path.join(jobDir, 'analysis', 'audio.json'), 'utf8'));
@@ -68,7 +71,9 @@ try {
     keepFrames: !values['clean-frames'],
     sceneName: storyboard ? 'storyboard' : undefined,
     skipQc: values['skip-qc'],
-    qcStrict: values['qc-strict']
+    qcStrict: values['qc-strict'],
+    skipRepair: values['skip-repair'],
+    repairMaxAttempts: values['repair-attempts']
   });
   const logger = createLogger();
   logger.attachFile(path.join(jobDir, 'logs', 'pipeline.log'));
@@ -91,50 +96,32 @@ try {
 
   await checkDependencies(config);
   const frameTimeline = createTimeline({ durationSec: audioJson.durationSec, fps: config.fps });
-  // clear old frames
   fs.rmSync(job.paths.frames, { recursive: true, force: true });
   fs.mkdirSync(job.paths.frames, { recursive: true });
 
   const title = script.sentences?.[0]?.text || 'Untitled';
-  const scene = generateScene(config.sceneName, {
-    sceneDir: job.paths.scenes,
-    title: title.slice(0, 80),
-    subtitle: script.sentences?.[1]?.text?.slice(0, 120) || null,
-    durationSec: audioJson.durationSec,
-    fps: config.fps,
-    width: config.width,
-    height: config.height,
-    timeline: timelineDoc,
+  const cycle = await renderWithSelfRepair({
+    job,
+    config,
+    logger,
+    frameTimeline,
+    sceneName: config.sceneName,
+    sceneOptions: {
+      sceneDir: job.paths.scenes,
+      title: title.slice(0, 80),
+      subtitle: script.sentences?.[1]?.text?.slice(0, 120) || null,
+      durationSec: audioJson.durationSec,
+      fps: config.fps,
+      width: config.width,
+      height: config.height
+    },
+    timelineDoc,
     storyboard
   });
-
-  updateMetadata(job, { status: 'rendering' });
-  await renderFrames({
-    sceneHtmlPath: scene.sceneHtmlPath,
-    framesDir: job.paths.frames,
-    timeline: frameTimeline,
-    width: config.width,
-    height: config.height,
-    config,
-    logger
-  });
-
-  let qc = null;
-  if (!config.skipQc) {
-    updateMetadata(job, { status: 'qc' });
-    logger.info('Running visual QC');
-    qc = await runVisualQc({
-      framesDir: job.paths.frames,
-      timeline: frameTimeline,
-      width: config.width,
-      height: config.height,
-      config,
-      storyboard,
-      timelineDoc,
-      outDir: job.paths.analysis,
-      logger
-    });
-  }
+  storyboard = cycle.storyboard;
+  timelineDoc = cycle.timelineDoc;
+  const qc = cycle.qc;
+  const repair = cycle.repair;
 
   const silentVideo = path.join(job.paths.output, 'video_silent.mp4');
   const finalPath = path.join(job.paths.output, 'final.mp4');
@@ -163,10 +150,13 @@ try {
     status: 'completed',
     verification,
     qc: qc ? { passed: qc.passed, path: qc.path, summary: qc.summary } : null,
+    repair: repair
+      ? { attempted: repair.attempted, attempts: repair.attemptCount, success: repair.success, path: repair.path }
+      : null,
     outputPath: finalPath
   });
   console.log(
-    `\nRENDER COMPLETE\nOutput:\n${printRel(finalPath)}\nVisual QC: ${qc ? (qc.passed ? 'passed' : 'failed') : '(skipped)'}\n`
+    `\nRENDER COMPLETE\nOutput:\n${printRel(finalPath)}\nVisual QC: ${qc ? (qc.passed ? 'passed' : 'failed') : '(skipped)'}\nSelf-repair: ${repair ? (repair.attempted ? `${repair.attemptCount} attempt(s)` : 'not needed') : '(n/a)'}\n`
   );
 } catch (err) {
   fail(err);

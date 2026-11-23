@@ -1,7 +1,7 @@
 {
   "name": "cliprpro",
-  "version": "0.7.0",
-  "description": "CliprPro — local-first, code-driven AI video generation pipeline (OpenCode-ready). Phases 1–7: foundation through visual QC.",
+  "version": "0.8.0",
+  "description": "CliprPro — local-first, code-driven AI video generation pipeline (OpenCode-ready). Phases 1–8: foundation through self-repair.",
   "type": "module",
   "private": true,
   "engines": {

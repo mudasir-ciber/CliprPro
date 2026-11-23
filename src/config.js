@@ -1,5 +1,5 @@
 /**
- * Centralized configuration for Phases 1–7.
+ * Centralized configuration for Phases 1–8.
  * Priority: function overrides → process env → .env file → defaults.
  */
 import fs from 'node:fs';
@@ -32,7 +32,10 @@ export const DEFAULTS = Object.freeze({
   qcLowVariance: 40,
   qcContactSheet: true,
   qcFailOnError: true,
-  qcStrict: false
+  qcStrict: false,
+  repairMaxAttempts: 2,
+  skipRepair: false,
+  repairOnWarnings: false
 });
 
 /** Minimal .env loader (no dependency). Does not override variables already set. */
@@ -143,6 +146,13 @@ export function getConfig(overrides = {}) {
     qcContactSheet:
       overrides.qcContactSheet !== undefined
         ? Boolean(overrides.qcContactSheet)
-        : process.env.QC_CONTACT_SHEET !== '0'
+        : process.env.QC_CONTACT_SHEET !== '0',
+    skipRepair: overrides.skipRepair === true || process.env.SKIP_REPAIR === '1',
+    repairMaxAttempts: overrides.repairMaxAttempts ?? envNumber('REPAIR_MAX_ATTEMPTS', DEFAULTS.repairMaxAttempts),
+    repairOnWarnings:
+      overrides.repairOnWarnings === true ||
+      process.env.REPAIR_ON_WARNINGS === '1' ||
+      overrides.qcStrict === true ||
+      process.env.QC_STRICT === '1'
   };
 }

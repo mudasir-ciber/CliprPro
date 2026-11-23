@@ -25,7 +25,8 @@ Cursor builds this repository. **OpenCode** is the intended AI orchestrator (ski
 | 5 | Three.js / WebGL deterministic 3D scene | **Complete** |
 | 6 | Cinematic camera moves (dolly/orbit/crane/handheld) | **Complete** |
 | 7 | Visual QC (frame integrity, black/freeze, contact sheet) | **Complete** |
-| 8+ | Self-repair / long-form | Not started |
+| 8 | Self-repair (bounded QC → patch → re-render loop) | **Complete** |
+| 9+ | Long-form / production | Not started |
 
 ## Prerequisites
 
@@ -81,7 +82,7 @@ npm run render -- --job jobs/job-YYYYMMDD-NNN
 | `npm run demo` | End-to-end sample |
 | `npm test` | Unit + integration tests |
 
-Common flags: `--script`, `--audio`, `--input`, `--fps`, `--resolution`, `--jobs-dir`, `--clean-frames`, `--recompute`, `--no-cache`, `--debug`, `--engine estimated|whisper`, `--planner heuristic|llm|auto`, `--scene storyboard|threejs|basic`, `--skip-storyboard`, `--skip-qc`, `--qc-strict`.
+Common flags: `--script`, `--audio`, `--input`, `--fps`, `--resolution`, `--jobs-dir`, `--clean-frames`, `--recompute`, `--no-cache`, `--debug`, `--engine estimated|whisper`, `--planner heuristic|llm|auto`, `--scene storyboard|threejs|basic`, `--skip-storyboard`, `--skip-qc`, `--qc-strict`, `--skip-repair`, `--repair-attempts`.
 
 ### Phase 5 Three.js
 
@@ -106,6 +107,10 @@ After frames render (before encode), CliprPro samples PNGs and writes `analysis/
 - shot midpoint coverage
 
 Hard failures throw `QC_FAILED` (block encode). Use `--skip-qc` to bypass, `--qc-strict` to promote warnings to failures.
+
+### Phase 8 self-repair
+
+When QC fails, CliprPro plans deterministic repairs (brighten palette, boost motif/motion, unfreeze camera, or plain re-render), regenerates the scene, and re-renders — up to `--repair-attempts` (default 2). Writes `analysis/repair.json` + `qc-attempt-N.json`. Exhausted retries → `REPAIR_FAILED`. Disable with `--skip-repair`.
 
 ## Input format
 
@@ -215,7 +220,7 @@ Presets live in `src/visuals2d/presets.js` and are applied by the heuristic plan
 
 ## Roadmap
 
-1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D ✓ · 5. Three.js/WebGL ✓ · 6. Cinematic ✓ · 7. Visual QC ✓ · 8. Self-repair · 9. Long-form · 10. Production
+1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D ✓ · 5. Three.js/WebGL ✓ · 6. Cinematic ✓ · 7. Visual QC ✓ · 8. Self-repair ✓ · 9. Long-form · 10. Production
 
 ## License
 

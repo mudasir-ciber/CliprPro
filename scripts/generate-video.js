@@ -24,6 +24,8 @@ Options:
   --skip-storyboard      Phase 2 timeline only (skip Phase 3)
   --skip-qc              Skip Phase 7 visual QC
   --qc-strict            Treat QC warnings as failures
+  --skip-repair          Disable Phase 8 self-repair loop
+  --repair-attempts <n>  Max repair re-renders (default 2)
   -h, --help`;
 
 const values = parseCli();
@@ -55,7 +57,9 @@ try {
     sceneName: values.scene,
     skipStoryboard: values['skip-storyboard'],
     skipQc: values['skip-qc'],
-    qcStrict: values['qc-strict']
+    qcStrict: values['qc-strict'],
+    skipRepair: values['skip-repair'],
+    repairMaxAttempts: values['repair-attempts']
   });
 
   console.log(`
@@ -70,13 +74,14 @@ Storyboard shots: ${result.storyboard?.shots?.length ?? 0}
 Planner: ${result.storyboard?.planner ?? '(skipped)'}
 Timeline valid: ${result.timeline?.validation?.valid}
 Visual QC: ${result.qc ? (result.qc.passed ? 'passed' : 'failed') : '(skipped)'}
+Self-repair: ${result.repair ? (result.repair.attempted ? `${result.repair.attemptCount} attempt(s), ${result.repair.success ? 'ok' : 'failed'}` : 'not needed') : '(n/a)'}
 
 Output:
 ${printRel(result.outputPath)}
 
 Timeline:
 ${printRel(result.analysisPaths.timeline)}
-${result.analysisPaths.storyboard ? `Storyboard:\n${printRel(result.analysisPaths.storyboard)}\n` : ''}${result.analysisPaths.qc ? `QC:\n${printRel(result.analysisPaths.qc)}\n` : ''}`);
+${result.analysisPaths.storyboard ? `Storyboard:\n${printRel(result.analysisPaths.storyboard)}\n` : ''}${result.analysisPaths.qc ? `QC:\n${printRel(result.analysisPaths.qc)}\n` : ''}${result.analysisPaths.repair ? `Repair:\n${printRel(result.analysisPaths.repair)}\n` : ''}`);
 } catch (err) {
   fail(err);
 }

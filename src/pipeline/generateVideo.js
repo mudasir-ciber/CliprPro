@@ -1,5 +1,5 @@
 /**
- * Full pipeline orchestrator (Phases 1–7).
+ * Full pipeline orchestrator (Phases 1–8).
  *
  * Script + Voiceover
  *   -> Phase 2 analysis (timeline.json)
@@ -7,6 +7,7 @@
  *   -> deterministic scene renderAt(time)
  *   -> Playwright frames
  *   -> Phase 7 visual QC (qc.json)
+ *   -> Phase 8 self-repair loop (bounded) if QC fails
  *   -> FFmpeg encode -> original voiceover -> final.mp4
  */
 import fs from 'node:fs';
@@ -16,14 +17,12 @@ import { createLogger } from '../utils/logger.js';
 import { VideoGenError, ErrorCodes } from '../utils/errors.js';
 import { checkDependencies } from './checkDependencies.js';
 import { createTimeline } from './timeline.js';
-import { generateScene } from '../scenes/index.js';
-import { renderFrames } from '../renderer/renderer.js';
 import { encodeFrames, mergeAudio } from '../renderer/encoder.js';
 import { verifyOutput } from './verifyOutput.js';
 import { updateMetadata } from './job.js';
 import { analyzeVideo } from './analyzeVideo.js';
 import { planStoryboardForJob } from './planStoryboard.js';
-import { runVisualQc } from '../qc/runQc.js';
+import { renderWithSelfRepair } from '../repair/loop.js';
 
 /**
  * @param {object} options
@@ -91,58 +90,41 @@ export async function generateVideo(options) {
     const title = script.sentences?.[0]?.text || 'Untitled';
     const subtitle = script.sentences?.[1]?.text || null;
     const sceneName = options.sceneName || config.sceneName || (storyboard ? 'storyboard' : 'basic');
-    const scene = generateScene(sceneName, {
-      sceneDir: job.paths.scenes,
-      title: title.length > 80 ? `${title.slice(0, 79)}…` : title,
-      subtitle: subtitle ? (subtitle.length > 120 ? `${subtitle.slice(0, 119)}…` : subtitle) : null,
-      durationSec: audio.durationSec,
-      fps: config.fps,
-      width: config.width,
-      height: config.height,
-      timeline: timelineDoc,
-      storyboard
-    });
-    logger.info(`Scene generated: ${path.basename(scene.sceneHtmlPath)} (${scene.name})`);
-    updateMetadata(job, { scene: { name: scene.name, path: scene.sceneHtmlPath } });
 
-    let t0 = Date.now();
-    const rendered = await renderFrames({
-      sceneHtmlPath: scene.sceneHtmlPath,
-      framesDir: job.paths.frames,
-      timeline: frameTimeline,
-      width: config.width,
-      height: config.height,
+    const tRender = Date.now();
+    const cycle = await renderWithSelfRepair({
+      job,
       config,
       logger,
+      frameTimeline,
+      sceneName,
+      sceneOptions: {
+        sceneDir: job.paths.scenes,
+        title: title.length > 80 ? `${title.slice(0, 79)}…` : title,
+        subtitle: subtitle ? (subtitle.length > 120 ? `${subtitle.slice(0, 119)}…` : subtitle) : null,
+        durationSec: audio.durationSec,
+        fps: config.fps,
+        width: config.width,
+        height: config.height
+      },
+      timelineDoc,
+      storyboard,
       maxFrames: options.maxFrames
     });
-    timings.renderSec = (Date.now() - t0) / 1000;
-
-    let qc = null;
-    if (!config.skipQc) {
-      updateMetadata(job, { status: 'qc' });
-      logger.info('Running visual QC');
-      t0 = Date.now();
-      qc = await runVisualQc({
-        framesDir: job.paths.frames,
-        timeline: frameTimeline,
-        width: config.width,
-        height: config.height,
-        config,
-        storyboard,
-        timelineDoc,
-        outDir: job.paths.analysis,
-        logger
-      });
-      timings.qcSec = (Date.now() - t0) / 1000;
-      updateMetadata(job, { qc: { passed: qc.passed, path: qc.path, summary: qc.summary } });
-    } else {
-      logger.info('Visual QC skipped');
+    const rendered = cycle.rendered;
+    const qc = cycle.qc;
+    const repair = cycle.repair;
+    timelineDoc = cycle.timelineDoc;
+    storyboard = cycle.storyboard;
+    timings.renderSec = (Date.now() - tRender) / 1000;
+    if (repair?.attempts?.length) {
+      timings.qcSec = repair.attempts.reduce((a, x) => a + (x.qcSec || 0), 0);
+      timings.repairAttempts = repair.attemptCount;
     }
 
+    let t0 = Date.now();
     updateMetadata(job, { status: 'encoding' });
     logger.info('Encoding video');
-    t0 = Date.now();
     const silentVideo = path.join(job.paths.output, 'video_silent.mp4');
     await encodeFrames({ framesDir: job.paths.frames, fps: config.fps, outputPath: silentVideo, config });
     timings.encodeSec = (Date.now() - t0) / 1000;
@@ -186,9 +168,12 @@ export async function generateVideo(options) {
       framesRendered: rendered.framesRendered,
       verification,
       qc: qc ? { passed: qc.passed, path: qc.path, summary: qc.summary } : null,
+      repair: repair
+        ? { attempted: repair.attempted, attempts: repair.attemptCount, success: repair.success, path: repair.path }
+        : null,
       timings,
       analysisCacheKey: analysis.cacheKey,
-      phase: qc ? 7 : storyboard ? 6 : 2
+      phase: repair?.attempted ? 8 : qc ? 7 : storyboard ? 6 : 2
     });
 
     return {
@@ -203,13 +188,15 @@ export async function generateVideo(options) {
       framesRendered: rendered.framesRendered,
       verification,
       qc,
+      repair,
       timings,
       timeline: timelineDoc,
       storyboard,
       analysisPaths: {
         ...analysis.paths,
         storyboard: storyboard ? path.join(job.paths.analysis, 'storyboard.json') : null,
-        qc: qc?.path || null
+        qc: qc?.path || null,
+        repair: repair?.path || null
       }
     };
   } catch (err) {
