@@ -53,6 +53,8 @@ try {
   const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
   const timelineDoc = JSON.parse(fs.readFileSync(timelinePath, 'utf8'));
   const script = JSON.parse(fs.readFileSync(scriptPath, 'utf8'));
+  const storyboardPath = path.join(jobDir, 'analysis', 'storyboard.json');
+  const storyboard = fs.existsSync(storyboardPath) ? JSON.parse(fs.readFileSync(storyboardPath, 'utf8')) : null;
   const audioFile = fs.readdirSync(path.join(jobDir, 'input')).map((f) => path.join(jobDir, 'input', f)).find((f) => /\.(mp3|wav|m4a|aac)$/i.test(f));
   if (!audioFile) throw new VideoGenError(ErrorCodes.AUDIO_MISSING, 'No voiceover in job input/');
 
@@ -60,7 +62,8 @@ try {
   const config = getConfig({
     fps: values.fps,
     resolution: values.resolution,
-    keepFrames: !values['clean-frames']
+    keepFrames: !values['clean-frames'],
+    sceneName: storyboard ? 'storyboard' : undefined
   });
   const logger = createLogger();
   logger.attachFile(path.join(jobDir, 'logs', 'pipeline.log'));
@@ -96,7 +99,8 @@ try {
     fps: config.fps,
     width: config.width,
     height: config.height,
-    timeline: timelineDoc
+    timeline: timelineDoc,
+    storyboard
   });
 
   updateMetadata(job, { status: 'rendering' });

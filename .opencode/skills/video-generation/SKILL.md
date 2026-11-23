@@ -1,21 +1,21 @@
 ---
 name: video-generation
-description: Operate CliprPro — local-first code-driven video pipeline. Validate inputs, run Phase 2 analysis (script/audio/transcript/alignment/timeline), render deterministic Canvas frames with Playwright, encode with FFmpeg, mux original voiceover. Use when the user asks to generate, analyze, render, validate, or debug a video from a script and voiceover.
+description: Operate CliprPro — local-first code-driven video pipeline. Analyze script+voiceover into a timeline, plan a Phase 3 storyboard (visualIntent), render deterministic Canvas frames with Playwright, encode with FFmpeg, mux original voiceover. Use when the user asks to generate, analyze, storyboard, render, validate, or debug a video.
 ---
 
-# CliprPro Video Generation Skill (Phase 1 + Phase 2)
+# CliprPro Video Generation Skill (Phases 1–3)
 
 ## Purpose
 
-This repository is a **code-driven** video generator. The AI does NOT generate video pixels.
+Code-driven video generator. The AI does NOT paint pixels.
 Pipeline:
 
 ```
 script + voiceover
-  → validate → audio analysis → transcription → alignment
-  → pauses → narrative segmentation → importance → timeline.json
-  → deterministic HTML/Canvas scene (renderAt(time))
-  → Playwright PNG frames → FFmpeg H.264 + ORIGINAL voiceover
+  → Phase 2 analysis → timeline.json
+  → Phase 3 storyboard → storyboard.json (visualIntent per scene)
+  → HTML/Canvas scene (renderAt(time))
+  → Playwright PNGs → FFmpeg H.264 + ORIGINAL voiceover
   → final.mp4
 ```
 
@@ -23,118 +23,81 @@ Audio duration is the **master clock**.
 
 ## Current scope
 
-**Implemented (Phase 1 + 2):**
-- Input validation, FFmpeg/FFprobe/Playwright checks
-- Script parser + sentence IDs
-- Audio metadata + silence/speech regions
-- Transcription abstraction (`estimated` default; optional local `whisper`)
-- Script↔transcript alignment, pause detection, heuristic narrative segments, importance scores
-- `timeline.json` v2.0 + validation
-- Analysis caching
-- Deterministic basic Canvas scene (shows timeline narration text)
-- Frame capture, encode, voiceover mux, FFprobe verification
-- OpenCode commands for generate / analyze / render / validate / debug
+**Implemented:**
+- Phase 1: deterministic render/encode/mux
+- Phase 2: script/audio/transcript/alignment/pauses/narrative/importance/timeline
+- Phase 3: storyboard planner (`heuristic` default, optional `llm`), `storyboard` Canvas scene (mood/layout/motion/palette), OpenCode commands
 
-**NOT implemented (do not claim or build now — Phase 3+):**
-- AI storyboard / cinematic scene planning
-- LLM visual prompt generation
-- Three.js / WebGL scenes
-- Visual QC / auto repair
-
-`visualIntent.type = "placeholder"` is reserved for Phase 3.
+**NOT implemented yet (Phase 4+):**
+- Advanced multi-module 2D generators
+- Three.js / WebGL
+- Visual QC / auto-repair
+- Long-form performance overhaul
 
 ## Prerequisites
 
 ```bash
 npm install
-npx playwright install chromium
+npx playwright install chromium   # or use installed Google Chrome
 npm run check-env
 ```
 
-`check-env` must show OK for FFmpeg, FFprobe, and Chromium.
-
-## Inputs
-
-```
-input/
-├── script.txt        UTF-8. Prose or markdown headings. Full text is analyzed in Phase 2.
-└── voiceover.mp3     mp3 | wav | m4a | aac  (duration = master timeline)
-```
-
-## Commands (invoke these; do not reinvent the pipeline)
+## Commands
 
 ```bash
 npm run check-env
-npm run analyze -- --input input [--debug] [--force] [--engine estimated]
-npm run generate -- --input input [--fps 30] [--resolution 1920x1080] [--clean-frames] [--force]
-npm run render -- --job jobs/<job-id>
-npm run validate-timeline -- --file jobs/<job-id>/analysis/timeline.json
-npm run debug -- --job jobs/<job-id>
+npm run analyze -- --input input
+npm run storyboard -- --job jobs/<id> [--planner heuristic|llm|auto]
+npm run generate -- --input input [--planner heuristic] [--scene storyboard]
+npm run render -- --job jobs/<id>
+npm run validate-timeline -- --file jobs/<id>/analysis/timeline.json
+npm run debug -- --job jobs/<id>
 npm run demo
 npm test
 ```
 
 ### Recommended OpenCode orchestration
 
-1. `npm run check-env` — stop on failure with the exact message.
-2. Confirm `script.txt` + `voiceover.*` exist (or `--script` / `--audio` paths).
-3. Prefer full run: `npm run generate -- --input input` (analyze + render).
-4. Or staged: `analyze` → inspect `timeline.json` → `generate` / `render`.
-5. On success: report Job ID, duration, FPS, resolution, `output/final.mp4`, and `analysis/timeline.json`.
-6. On failure: print `ERROR (CODE)`, then summarize `jobs/<id>/logs/pipeline.log`. Do not infinite-retry.
-7. For timing questions: `npm run debug -- --job jobs/<id>`.
+1. `npm run check-env`
+2. Confirm script + voiceover inputs
+3. Prefer: `npm run generate -- --input input` (analyze + storyboard + render)
+4. Or staged: `analyze` → `storyboard` → `render`
+5. Report Job ID, `output/final.mp4`, `analysis/timeline.json`, `analysis/storyboard.json`
+6. On failure: `ERROR (CODE)` + summarize `logs/pipeline.log` once
+
+## Storyboard planners
+
+| Planner | When |
+|---------|------|
+| `heuristic` | Default, offline, deterministic |
+| `llm` | Needs `STORYBOARD_API_KEY` or `OPENAI_API_KEY` |
+| `auto` | Try LLM, fall back to heuristic |
+
+OpenCode may also author a storyboard JSON and apply with `--storyboard path.json`.
 
 ## Job layout
 
 ```
-jobs/job-YYYYMMDD-NNN/
-├── input/           script + voiceover copies
-├── audio/           analysis.json (compat)
+jobs/job-…/
 ├── analysis/
-│   ├── script.json
-│   ├── audio.json
-│   ├── transcript.json
-│   ├── alignment.json
-│   ├── pauses.json
-│   ├── narrative.json
-│   ├── importance.json
-│   └── timeline.json
-├── scenes/          scene.html + scene.config.json
-├── frames/          frame_000001.png …
-├── output/          final.mp4
-├── logs/            pipeline.log
+│   ├── timeline.json
+│   ├── storyboard.json    # Phase 3
+│   └── …
+├── scenes/scene.html
+├── output/final.mp4
 └── metadata.json
 ```
 
-## Deterministic rendering rules
+## Determinism
 
-Scenes must expose `window.renderAt(time)` and `window.__sceneReady = true`.
-No `Date.now`, unseeded `Math.random`, or realtime animation for frame correctness.
-
-## Transcription
-
-- Default: `estimated` — maps script sentences onto speech regions by word weight (local, no model).
-- Optional: `TRANSCRIPTION_ENGINE=whisper` after `npm install @xenova/transformers` (downloads model on first use).
-- Timing provenance is stored per segment (`estimated` | `word` | `segment` | `interpolated`).
+Scenes expose `window.renderAt(time)` + `__sceneReady`.
+No `Date.now` / unseeded `Math.random` / realtime animation for frame correctness.
 
 ## Failure recovery
 
-| Code / symptom | Action |
-|----------------|--------|
-| FFmpeg / FFprobe missing | Install FFmpeg, set PATH or `.env` paths, reopen terminal |
-| Chromium missing | `npx playwright install chromium` |
-| SCRIPT_/AUDIO_ errors | Fix input paths / formats |
-| TIMELINE_INVALID | `npm run debug -- --job …` then `--force` re-analyze |
-| TRANSCRIPTION_UNAVAILABLE | Use `--engine estimated` or install Whisper deps |
-
-Rerun analysis only: `npm run analyze -- --input input --force`  
-Rerun render from existing timeline: `npm run render -- --job jobs/<id>`
-
-## Output reporting
-
-Always report:
-- Job ID
-- `jobs/<id>/output/final.mp4`
-- `jobs/<id>/analysis/timeline.json`
-- timeline validation `valid: true/false`
-- status from `metadata.json`
+| Issue | Action |
+|-------|--------|
+| Missing FFmpeg/Chrome | Install / PATH / `CHROMIUM_PATH` |
+| STORYBOARD_UNAVAILABLE | Use `--planner heuristic` |
+| Bad timeline | `debug` then `analyze --recompute` |
+| Re-render only | `npm run render -- --job …` |

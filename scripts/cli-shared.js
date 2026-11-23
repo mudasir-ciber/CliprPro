@@ -18,6 +18,10 @@ export function baseOptions() {
     'no-cache': { type: 'boolean', default: false },
     debug: { type: 'boolean', default: false },
     engine: { type: 'string' },
+    planner: { type: 'string' },
+    storyboard: { type: 'string' },
+    scene: { type: 'string' },
+    'skip-storyboard': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false }
   };
 }

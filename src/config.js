@@ -1,5 +1,5 @@
 /**
- * Centralized configuration for Phase 1 + Phase 2.
+ * Centralized configuration for Phase 1–3.
  * Priority: function overrides → process env → .env file → defaults.
  */
 import fs from 'node:fs';
@@ -15,7 +15,7 @@ export const DEFAULTS = Object.freeze({
   fps: 30,
   width: 1920,
   height: 1080,
-  sceneName: 'basic',
+  sceneName: 'storyboard',
   jobsDirName: 'jobs',
   transcriptionEngine: 'estimated',
   transcriptionLanguage: 'en',
@@ -25,7 +25,8 @@ export const DEFAULTS = Object.freeze({
   minSilenceSec: 0.25,
   pauseShortMax: 0.4,
   pauseMediumMax: 1.0,
-  pauseMinGap: 0.2
+  pauseMinGap: 0.2,
+  storyboardPlanner: 'heuristic'
 });
 
 /** Minimal .env loader (no dependency). Does not override variables already set. */
@@ -114,6 +115,15 @@ export function getConfig(overrides = {}) {
     minSilenceSec: overrides.minSilenceSec ?? envNumber('MIN_SILENCE_SEC', DEFAULTS.minSilenceSec),
     pauseShortMax: overrides.pauseShortMax ?? envNumber('PAUSE_SHORT_MAX', DEFAULTS.pauseShortMax),
     pauseMediumMax: overrides.pauseMediumMax ?? envNumber('PAUSE_MEDIUM_MAX', DEFAULTS.pauseMediumMax),
-    pauseMinGap: overrides.pauseMinGap ?? envNumber('PAUSE_MIN_GAP', DEFAULTS.pauseMinGap)
+    pauseMinGap: overrides.pauseMinGap ?? envNumber('PAUSE_MIN_GAP', DEFAULTS.pauseMinGap),
+    storyboardPlanner: (
+      overrides.storyboardPlanner ||
+      process.env.STORYBOARD_PLANNER ||
+      DEFAULTS.storyboardPlanner
+    ).toLowerCase(),
+    storyboardApiKey: overrides.storyboardApiKey || process.env.STORYBOARD_API_KEY || process.env.OPENAI_API_KEY || null,
+    storyboardApiUrl: overrides.storyboardApiUrl || process.env.STORYBOARD_API_URL || null,
+    storyboardModel: overrides.storyboardModel || process.env.STORYBOARD_MODEL || 'gpt-4o-mini',
+    skipStoryboard: overrides.skipStoryboard === true || process.env.SKIP_STORYBOARD === '1'
   };
 }

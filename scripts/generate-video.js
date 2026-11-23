@@ -18,6 +18,10 @@ Options:
   --no-cache
   --debug                Dump analysis debug info
   --engine <name>        estimated (default) | whisper
+  --planner <name>       storyboard planner: heuristic (default) | llm | auto
+  --storyboard <file>    apply an existing storyboard.json
+  --scene <name>         storyboard (default) | basic
+  --skip-storyboard      Phase 2 timeline only (skip Phase 3)
   -h, --help`;
 
 const values = parseCli();
@@ -43,7 +47,11 @@ try {
     force: values.force || values.recompute,
     noCache: values['no-cache'],
     debug: values.debug,
-    transcriptionEngine: values.engine
+    transcriptionEngine: values.engine,
+    planner: values.planner,
+    storyboardPath: values.storyboard,
+    sceneName: values.scene,
+    skipStoryboard: values['skip-storyboard']
   });
 
   console.log(`
@@ -54,6 +62,8 @@ Duration: ${result.durationSec.toFixed(2)} sec
 FPS: ${result.fps}
 Resolution: ${result.width}x${result.height}
 Timeline scenes: ${result.timeline?.scenes?.length ?? 0}
+Storyboard shots: ${result.storyboard?.shots?.length ?? 0}
+Planner: ${result.storyboard?.planner ?? '(skipped)'}
 Timeline valid: ${result.timeline?.validation?.valid}
 
 Output:
@@ -61,7 +71,7 @@ ${printRel(result.outputPath)}
 
 Timeline:
 ${printRel(result.analysisPaths.timeline)}
-`);
+${result.analysisPaths.storyboard ? `Storyboard:\n${printRel(result.analysisPaths.storyboard)}\n` : ''}`);
 } catch (err) {
   fail(err);
 }

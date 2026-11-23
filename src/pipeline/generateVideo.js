@@ -1,9 +1,10 @@
 /**
- * Full pipeline orchestrator (Phase 1 render + Phase 2 analysis).
+ * Full pipeline orchestrator (Phase 1–3).
  *
  * Script + Voiceover
  *   -> Phase 2 analysis (timeline.json)
- *   -> deterministic scene (uses timeline narration when available)
+ *   -> Phase 3 storyboard (visualIntent per scene)
+ *   -> deterministic scene renderAt(time)
  *   -> Playwright frames -> FFmpeg encode -> original voiceover -> final.mp4
  */
 import fs from 'node:fs';
@@ -19,6 +20,7 @@ import { encodeFrames, mergeAudio } from '../renderer/encoder.js';
 import { verifyOutput } from './verifyOutput.js';
 import { updateMetadata } from './job.js';
 import { analyzeVideo } from './analyzeVideo.js';
+import { planStoryboardForJob } from './planStoryboard.js';
 
 /**
  * @param {object} options
@@ -34,7 +36,6 @@ export async function generateVideo(options) {
     const deps = await checkDependencies(config);
     logger.info(`FFmpeg ${deps.ffmpeg} / FFprobe ${deps.ffprobe} / Chromium OK`);
 
-    // Phase 2 analysis (creates job, copies inputs, writes analysis/*)
     const analysis = await analyzeVideo({
       ...options,
       logger,
@@ -47,11 +48,32 @@ export async function generateVideo(options) {
     job = analysis.job;
     const audio = analysis.audio;
     const script = analysis.script;
-    const timelineDoc = analysis.timeline;
+    let timelineDoc = analysis.timeline;
+    let storyboard = null;
+
+    // Phase 3 storyboard
+    if (!config.skipStoryboard) {
+      const planned = await planStoryboardForJob({
+        job,
+        jobDir: job.dir,
+        timeline: timelineDoc,
+        script,
+        logger,
+        planner: options.planner || config.storyboardPlanner,
+        storyboardPath: options.storyboardPath,
+        storyboardPlanner: options.planner || config.storyboardPlanner,
+        storyboardApiKey: config.storyboardApiKey,
+        storyboardApiUrl: config.storyboardApiUrl,
+        storyboardModel: config.storyboardModel
+      });
+      timelineDoc = planned.timeline;
+      storyboard = planned.storyboard;
+      timings.storyboardSec = (Date.now() - started) / 1000;
+    }
 
     const frameTimeline = createTimeline({ durationSec: audio.durationSec, fps: config.fps });
     logger.info(`Timeline: ${frameTimeline.totalFrames} frames @ ${config.fps} fps`);
-    logger.info(`Narrative scenes: ${timelineDoc.scenes?.length || 0}, segments: ${timelineDoc.segments?.length || 0}`);
+    logger.info(`Narrative scenes: ${timelineDoc.scenes?.length || 0}, storyboard shots: ${storyboard?.shots?.length || 0}`);
 
     const finalPath = path.join(job.paths.output, 'final.mp4');
     updateMetadata(job, {
@@ -60,13 +82,13 @@ export async function generateVideo(options) {
       resolution: { width: config.width, height: config.height },
       totalFrames: frameTimeline.totalFrames,
       outputPath: finalPath,
-      phase: 2
+      phase: storyboard ? 3 : 2
     });
 
-    // Scene — Phase 1 basic renderer enriched with Phase 2 timeline narration
     const title = script.sentences?.[0]?.text || 'Untitled';
     const subtitle = script.sentences?.[1]?.text || null;
-    const scene = generateScene(config.sceneName, {
+    const sceneName = options.sceneName || config.sceneName || (storyboard ? 'storyboard' : 'basic');
+    const scene = generateScene(sceneName, {
       sceneDir: job.paths.scenes,
       title: title.length > 80 ? `${title.slice(0, 79)}…` : title,
       subtitle: subtitle ? (subtitle.length > 120 ? `${subtitle.slice(0, 119)}…` : subtitle) : null,
@@ -74,7 +96,8 @@ export async function generateVideo(options) {
       fps: config.fps,
       width: config.width,
       height: config.height,
-      timeline: timelineDoc
+      timeline: timelineDoc,
+      storyboard
     });
     logger.info(`Scene generated: ${path.basename(scene.sceneHtmlPath)} (${scene.name})`);
     updateMetadata(job, { scene: { name: scene.name, path: scene.sceneHtmlPath } });
@@ -138,7 +161,8 @@ export async function generateVideo(options) {
       framesRendered: rendered.framesRendered,
       verification,
       timings,
-      analysisCacheKey: analysis.cacheKey
+      analysisCacheKey: analysis.cacheKey,
+      phase: storyboard ? 3 : 2
     });
 
     return {
@@ -154,7 +178,11 @@ export async function generateVideo(options) {
       verification,
       timings,
       timeline: timelineDoc,
-      analysisPaths: analysis.paths
+      storyboard,
+      analysisPaths: {
+        ...analysis.paths,
+        storyboard: storyboard ? path.join(job.paths.analysis, 'storyboard.json') : null
+      }
     };
   } catch (err) {
     const known = err instanceof VideoGenError;

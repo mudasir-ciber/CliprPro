@@ -20,7 +20,8 @@ Cursor builds this repository. **OpenCode** is the intended AI orchestrator (ski
 |-------|--------|--------|
 | 1 | Foundation + deterministic render/encode | **Complete** |
 | 2 | Audio/script analysis + timeline engine | **Complete** |
-| 3+ | AI storyboard / 3D / QC / repair | Not started (interfaces only) |
+| 3 | Storyboard planning + storyboard Canvas scene | **Complete** |
+| 4+ | Advanced 2D / 3D / QC / repair | Not started |
 
 ## Prerequisites
 
@@ -54,6 +55,9 @@ npm run generate -- --input input
 # Analysis only
 npm run analyze -- --input input --debug
 
+# Storyboard only (needs analyzed job)
+npm run storyboard -- --job jobs/job-YYYYMMDD-NNN
+
 # Re-render an existing job
 npm run render -- --job jobs/job-YYYYMMDD-NNN
 ```
@@ -64,14 +68,15 @@ npm run render -- --job jobs/job-YYYYMMDD-NNN
 |---------|---------|
 | `npm run check-env` | Verify Node / FFmpeg / FFprobe / Chromium |
 | `npm run analyze` | Phase 2 → `analysis/timeline.json` |
-| `npm run generate` | Analyze + render + encode + mux |
-| `npm run render` | Render from existing job timeline |
+| `npm run storyboard` | Phase 3 → `analysis/storyboard.json` |
+| `npm run generate` | Analyze + storyboard + render + encode + mux |
+| `npm run render` | Render from existing job timeline/storyboard |
 | `npm run validate-timeline` | Validate `timeline.json` |
 | `npm run debug` | Inspect job artifacts / debug analysis |
 | `npm run demo` | End-to-end sample |
 | `npm test` | Unit + integration tests |
 
-Common flags: `--script`, `--audio`, `--input`, `--fps`, `--resolution`, `--jobs-dir`, `--clean-frames`, `--force`, `--no-cache`, `--debug`, `--engine estimated|whisper`.
+Common flags: `--script`, `--audio`, `--input`, `--fps`, `--resolution`, `--jobs-dir`, `--clean-frames`, `--recompute`, `--no-cache`, `--debug`, `--engine estimated|whisper`, `--planner heuristic|llm|auto`, `--scene storyboard|basic`, `--skip-storyboard`.
 
 ## Input format
 
@@ -95,7 +100,8 @@ jobs/job-YYYYMMDD-NNN/
 │   ├── pauses.json
 │   ├── narrative.json
 │   ├── importance.json
-│   └── timeline.json
+│   ├── timeline.json
+│   └── storyboard.json
 ├── scenes/
 ├── frames/
 ├── output/final.mp4
@@ -144,17 +150,33 @@ Missing FFmpeg/Chromium skips related tests unless `REQUIRE_E2E=1`.
 | Timeline invalid | `npm run debug -- --job …` then `analyze --force` |
 | Whisper unavailable | Use `--engine estimated` or install `@xenova/transformers` |
 
-## Known limitations (Phase 2)
+## Phase 3 storyboard
 
-- Basic Canvas scene only (timeline-aware narration text — not AI storyboards).
+Default planner is **heuristic** (offline): maps narrative role + importance + text cues → mood / layout / motion / palette / visualPrompt.
+
+Optional LLM planner (OpenAI-compatible):
+
+```bash
+# .env
+STORYBOARD_PLANNER=llm
+STORYBOARD_API_KEY=...
+# or OPENAI_API_KEY=...
+npm run generate -- --input input --planner llm
+```
+
+The `storyboard` scene renders those intents as deterministic Canvas compositions (not Three.js).
+
+## Known limitations
+
 - Default transcription is estimated unless Whisper is configured.
-- Narrative roles are **heuristics**, not LLM classification.
+- Heuristic storyboard is strong structure, not Claude-class cinematic art direction (LLM planner + Phase 4+ improve look).
+- Narrative roles remain heuristics unless an external agent supplies a storyboard JSON.
 - Per-frame Playwright screenshots are correct but slow on long videos.
 - Fonts depend on the host OS (Segoe UI on Windows).
 
 ## Roadmap
 
-1. Foundation ✓ · 2. Timeline engine ✓ · 3. AI storyboard · 4. Advanced 2D · 5. Three.js/WebGL · 6. Cinematic · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
+1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D · 5. Three.js/WebGL · 6. Cinematic · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
 
 ## License
 

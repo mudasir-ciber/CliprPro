@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scene: storyboard</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+"use strict";
+/*
+ * STORYBOARD SCENE (Phase 3)
+ * Deterministic: pixels are a pure function of time + CFG.shots visualIntent.
+ */
+const CFG = __SCENE_CONFIG__;
+const W = CFG.width, H = CFG.height, D = CFG.durationSec;
+const DW = 1920, DH = 1080;
+const FONT = "'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+const canvas = document.getElementById('stage');
+canvas.width = W; canvas.height = H;
+const ctx = canvas.getContext('2d');
+
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function timecode(s) {
+  const m = Math.floor(s / 60);
+  const sec = s - m * 60;
+  return String(m).padStart(2, '0') + ':' + sec.toFixed(2).padStart(5, '0');
+}
+function wrapText(text, maxWidth, font) {
+  ctx.font = font;
+  const words = String(text || '').split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 5);
+}
+
+const rng = mulberry32(CFG.seed === undefined ? 42 : CFG.seed);
+const PARTICLES = Array.from({ length: 90 }, () => ({
+  x: rng() * DW, y: rng() * DH, r: 0.8 + rng() * 2.2, ph: rng() * Math.PI * 2, sp: 0.4 + rng() * 1.6
+}));
+
+const DEFAULT_PALETTE = { bg0: '#0b1220', bg1: '#151b3a', accent: '#6ea8ff', text: '#ffffff', muted: '#9eb6ff' };
+
+function activeShot(t) {
+  const list = CFG.shots || [];
+  for (let i = 0; i < list.length; i++) {
+    if (t >= list[i].start && t < list[i].end) return list[i];
+  }
+  if (list.length && t >= list[list.length - 1].start) return list[list.length - 1];
+  return null;
+}
+
+function localProgress(shot, t) {
+  if (!shot) return 0;
+  const dur = Math.max(1e-6, shot.end - shot.start);
+  return clamp((t - shot.start) / dur);
+}
+
+function motionOffset(motion, p, t) {
+  switch (motion) {
+    case 'impact': return { x: (1 - easeOut(clamp(p * 3))) * -40, y: (1 - easeOut(clamp(p * 3))) * 30, s: 0.92 + 0.12 * easeOut(clamp(p * 2.5)) };
+    case 'pulse': return { x: 0, y: Math.sin(t * 3) * 8, s: 1 + 0.04 * Math.sin(t * 4) };
+    case 'orbit': return { x: Math.cos(t * 1.2) * 24, y: Math.sin(t * 1.2) * 14, s: 1 };
+    case 'sweep': return { x: lerp(-60, 0, easeOut(p)), y: 0, s: 1 };
+    case 'fade': return { x: 0, y: 20 * (1 - easeOut(p)), s: 1 };
+    case 'rise':
+    default: return { x: 0, y: lerp(50, 0, easeOut(p)), s: lerp(0.96, 1, easeOut(p)) };
+  }
+}
+
+function drawBackground(t, palette, motion) {
+  const g = ctx.createLinearGradient(0, 0, DW, DH);
+  g.addColorStop(0, palette.bg0);
+  g.addColorStop(1, palette.bg1);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, DW, DH);
+
+  for (const s of PARTICLES) {
+    const a = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * s.sp + s.ph));
+    ctx.fillStyle = palette.accent;
+    ctx.globalAlpha = a * 0.35;
+    ctx.beginPath();
+    ctx.arc(s.x + Math.sin(t * 0.3 + s.ph) * 10, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Accent wash
+  const cx = DW * (0.5 + 0.08 * Math.sin(t * 0.5));
+  const cy = DH * (0.4 + 0.05 * Math.cos(t * 0.4));
+  const rg = ctx.createRadialGradient(cx, cy, 40, cx, cy, 700);
+  rg.addColorStop(0, palette.accent + '55');
+  rg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, DW, DH);
+
+  if (motion === 'impact' || motion === 'kinetic') {
+    ctx.strokeStyle = palette.accent;
+    ctx.globalAlpha = 0.15;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      const y = 180 + i * 140 + Math.sin(t + i) * 8;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(DW, y + 40);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawOrb(x, y, r, palette, t, strength) {
+  const pulse = 1 + 0.08 * Math.sin(t * 3) * (strength || 0.5);
+  ctx.save();
+  ctx.shadowColor = palette.accent;
+  ctx.shadowBlur = 36;
+  const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r * pulse);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.35, palette.accent);
+  g.addColorStop(1, palette.bg1);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, r * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawBadge(label, x, y, palette) {
+  ctx.font = '700 22px ' + FONT;
+  const padX = 18, padY = 10;
+  const tw = ctx.measureText(label).width;
+  ctx.fillStyle = palette.accent + '33';
+  ctx.strokeStyle = palette.accent;
+  ctx.lineWidth = 2;
+  const w = tw + padX * 2, h = 22 + padY * 2;
+  const r = 8;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = palette.muted;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + padX, y + h / 2);
+}
+
+function drawNarration(shot, palette, layout, offset, alpha) {
+  const text = shot.text || '';
+  if (!text) return;
+  const maxW = layout === 'split-focus' ? 900 : 1500;
+  const size = layout === 'title-hero' ? 64 : layout === 'callout' ? 56 : 50;
+  const font = '700 ' + size + 'px ' + FONT;
+  const lines = wrapText(text, maxW, font);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = palette.text;
+  ctx.font = font;
+  ctx.textBaseline = 'middle';
+
+  let x = DW / 2 + offset.x;
+  let y = (layout === 'closing' ? 520 : 360) + offset.y;
+  ctx.textAlign = 'center';
+  if (layout === 'split-focus') {
+    x = 220 + offset.x;
+    y = 340 + offset.y;
+    ctx.textAlign = 'left';
+  }
+  if (layout === 'callout') {
+    y = 300 + offset.y;
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x, y + i * (size + 14) * offset.s);
+  }
+
+  // Emphasis underline on first keyword if present
+  const emp = shot.visualIntent && shot.visualIntent.emphasis && shot.visualIntent.emphasis[0];
+  if (emp && lines[0] && lines[0].toLowerCase().includes(String(emp).toLowerCase())) {
+    ctx.strokeStyle = palette.accent;
+    ctx.globalAlpha = alpha * 0.85;
+    ctx.lineWidth = 4;
+    const w = Math.min(ctx.measureText(lines[0]).width, maxW);
+    const x0 = ctx.textAlign === 'left' ? x : x - w / 2;
+    ctx.beginPath();
+    ctx.moveTo(x0, y + size * 0.55);
+    ctx.lineTo(x0 + w, y + size * 0.55);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawOverlay(t, palette, shot) {
+  const x0 = 80, x1 = DW - 80, y = 1030;
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fillRect(x0, y, x1 - x0, 8);
+  ctx.fillStyle = palette.accent;
+  ctx.fillRect(x0, y, (x1 - x0) * (D > 0 ? t / D : 0), 8);
+
+  ctx.font = '400 26px Consolas, "Courier New", monospace';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText(timecode(t) + ' / ' + timecode(D), DW - 80, 48);
+
+  if (shot && shot.visualIntent && shot.visualIntent.mood) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = palette.muted;
+    ctx.font = '600 20px ' + FONT;
+    ctx.fillText(String(shot.visualIntent.mood).toUpperCase() + ' · ' + String(shot.visualIntent.layout || ''), 80, 100);
+  }
+
+  const fadeLen = Math.min(0.7, D * 0.08);
+  const fo = clamp((t - (D - fadeLen)) / fadeLen);
+  if (fo > 0) {
+    ctx.fillStyle = 'rgba(0,0,0,' + fo.toFixed(4) + ')';
+    ctx.fillRect(0, 0, DW, DH);
+  }
+}
+
+window.renderAt = function renderAt(time) {
+  const n = Number(time);
+  if (!Number.isFinite(n)) throw new Error('renderAt: time must be a finite number, got ' + time);
+  const t = clamp(n, 0, D);
+  const shot = activeShot(t);
+  const intent = (shot && shot.visualIntent) || {};
+  const palette = intent.palette || DEFAULT_PALETTE;
+  const layout = intent.layout || 'center-focus';
+  const motion = intent.motion || 'rise';
+  const p = localProgress(shot, t);
+  const enter = easeOut(clamp(p / 0.25));
+  const offset = motionOffset(motion, p, t);
+  const zoom = (intent.camera && intent.camera.zoom) || 1;
+  const panX = ((intent.camera && intent.camera.panX) || 0) * DW;
+  const panY = ((intent.camera && intent.camera.panY) || 0) * DH;
+
+  ctx.setTransform(W / DW, 0, 0, H / DH, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.clearRect(0, 0, DW, DH);
+
+  // Camera transform
+  ctx.save();
+  ctx.translate(DW / 2 + panX, DH / 2 + panY);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-DW / 2, -DH / 2);
+
+  drawBackground(t, palette, motion);
+
+  if (shot) {
+    const badge = (intent.elements || []).find((e) => e.kind === 'badge');
+    if (badge && badge.label) drawBadge(badge.label, layout === 'split-focus' ? 220 : 80, 160, palette);
+
+    if (layout === 'split-focus' || layout === 'kinetic' || layout === 'callout') {
+      drawOrb(layout === 'split-focus' ? 1450 : 960, layout === 'callout' ? 720 : 560, 110 + 40 * (shot.importance || 0.5), palette, t, shot.importance || 0.5);
+    } else if (layout === 'title-hero') {
+      drawOrb(960, 780, 90, palette, t, 0.7);
+    } else if (layout === 'closing') {
+      drawOrb(960, 780, 70, palette, t, 0.4);
+    }
+
+    drawNarration(shot, palette, layout, offset, enter);
+
+    const kw = (intent.elements || []).find((e) => e.kind === 'keyword');
+    if (kw && kw.text && layout !== 'title-hero') {
+      ctx.globalAlpha = enter * 0.9;
+      ctx.font = '700 28px ' + FONT;
+      ctx.fillStyle = palette.accent;
+      ctx.textAlign = 'center';
+      ctx.fillText(String(kw.text).toUpperCase(), DW / 2 + offset.x, 900 + offset.y * 0.3);
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 72px ' + FONT;
+    ctx.textAlign = 'center';
+    ctx.fillText(CFG.title || 'CliprPro', DW / 2, DH / 2);
+  }
+
+  ctx.restore();
+  drawOverlay(t, palette, shot);
+  return t;
+};
+
+window.__scene = { name: 'storyboard', durationSec: D, width: W, height: H, fps: CFG.fps, phase: 3 };
+window.__sceneReady = true;
+</script>
+</body>
+</html>
