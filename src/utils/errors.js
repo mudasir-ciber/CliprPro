@@ -1,0 +1,34 @@
+/** Error type for all expected, user-facing failures. */
+export const ErrorCodes = Object.freeze({
+  INVALID_CONFIG: 'INVALID_CONFIG',
+  SCRIPT_MISSING: 'SCRIPT_MISSING',
+  SCRIPT_EMPTY: 'SCRIPT_EMPTY',
+  AUDIO_MISSING: 'AUDIO_MISSING',
+  AUDIO_UNSUPPORTED_FORMAT: 'AUDIO_UNSUPPORTED_FORMAT',
+  AUDIO_INVALID: 'AUDIO_INVALID',
+  INVALID_DURATION: 'INVALID_DURATION',
+  FFMPEG_MISSING: 'FFMPEG_MISSING',
+  FFPROBE_MISSING: 'FFPROBE_MISSING',
+  PLAYWRIGHT_MISSING: 'PLAYWRIGHT_MISSING',
+  CHROMIUM_MISSING: 'CHROMIUM_MISSING',
+  SCENE_GENERATION_FAILED: 'SCENE_GENERATION_FAILED',
+  SCENE_RENDER_FAILED: 'SCENE_RENDER_FAILED',
+  FRAME_CAPTURE_FAILED: 'FRAME_CAPTURE_FAILED',
+  ENCODE_FAILED: 'ENCODE_FAILED',
+  AUDIO_MERGE_FAILED: 'AUDIO_MERGE_FAILED',
+  OUTPUT_INVALID: 'OUTPUT_INVALID'
+});
+
+export class VideoGenError extends Error {
+  /**
+   * @param {string} code One of ErrorCodes
+   * @param {string} message Clean, user-facing message
+   * @param {{details?: string, cause?: unknown}} [opts] details = technical info (goes to logs)
+   */
+  constructor(code, message, opts = {}) {
+    super(message, opts.cause ? { cause: opts.cause } : undefined);
+    this.name = 'VideoGenError';
+    this.code = code;
+    this.details = opts.details || '';
+  }
+}

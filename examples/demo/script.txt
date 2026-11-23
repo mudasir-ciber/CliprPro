@@ -1,0 +1,5 @@
+Phase 1 Demo: Code-Driven Video
+A deterministic Canvas scene rendered frame by frame
+
+This script is only used for the title and subtitle in Phase 1.
+Later phases will analyse the full text and plan scenes automatically.

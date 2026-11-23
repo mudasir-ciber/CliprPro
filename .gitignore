@@ -1,0 +1,11 @@
+node_modules/
+jobs/*
+!jobs/.gitkeep
+input/*
+!input/.gitkeep
+examples/demo/voiceover.mp3
+.env
+*.log
+*.zip
+.DS_Store
+Thumbs.db

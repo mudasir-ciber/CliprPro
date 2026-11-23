@@ -1,0 +1,19 @@
+{
+  "name": "opencode-video-generator",
+  "version": "0.1.0",
+  "description": "Code-driven AI video generation pipeline for OpenCode (Phase 1: foundation).",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "generate": "node scripts/generate-video.js",
+    "demo": "node scripts/demo.js",
+    "check-env": "node scripts/check-env.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
