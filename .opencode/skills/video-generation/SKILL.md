@@ -1,9 +1,9 @@
 ---
 name: video-generation
-description: Operate CliprPro — local-first code-driven video pipeline. Analyze script+voiceover into a timeline, plan a storyboard with Phase 4 advanced 2D intents (motif/transition/typography/fx), render deterministic Canvas frames with Playwright, encode with FFmpeg, mux original voiceover. Use when the user asks to generate, analyze, storyboard, render, validate, or debug a video.
+description: Operate CliprPro — local-first code-driven video pipeline. Analyze script+voiceover into a timeline, plan a storyboard with Phase 4–6 visual intents (motif/transition/typography/fx + cinematic camera), render deterministic Canvas or Three.js frames with Playwright, encode with FFmpeg, mux original voiceover. Use when the user asks to generate, analyze, storyboard, render, validate, or debug a video.
 ---
 
-# CliprPro Video Generation Skill (Phases 1–5)
+# CliprPro Video Generation Skill (Phases 1–6)
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Pipeline:
 script + voiceover
   → Phase 2 analysis → timeline.json
   → Phase 3 storyboard → storyboard.json (visualIntent per scene)
-  → HTML/Canvas scene (renderAt(time))
+  → HTML/Canvas or Three.js scene (renderAt(time))
   → Playwright PNGs → FFmpeg H.264 + ORIGINAL voiceover
   → final.mp4
 ```
@@ -29,10 +29,10 @@ Audio duration is the **master clock**.
 - Phase 3: storyboard planner (`heuristic` default, optional `llm`)
 - Phase 4: advanced 2D motifs/transitions/typography/fx on the `storyboard` Canvas scene
 - Phase 5: deterministic Three.js/WebGL scene via `--scene threejs`
+- Phase 6: cinematic camera moves (`dolly-in/out`, `orbit-*`, `crane-*`, `handheld`, `push-slide`, `whip-pan`) on storyboard + threejs
 - OpenCode commands for generate / analyze / storyboard / render / validate / debug
 
-**NOT implemented yet (Phase 6+):**
-- Advanced cinematic camera systems
+**NOT implemented yet (Phase 7+):**
 - Visual QC / auto-repair
 - Long-form performance overhaul
 
@@ -64,7 +64,7 @@ npm test
 2. Confirm script + voiceover inputs
 3. Prefer: `npm run generate -- --input input` (analyze + storyboard + render)
 4. Or staged: `analyze` → `storyboard` → `render`
-5. Report Job ID, `output/final.mp4`, `analysis/timeline.json`, `analysis/storyboard.json`
+5. Report Job ID, `output/final.mp4`, `analysis/timeline.json`, `analysis/storyboard.json`, camera moves summary
 6. On failure: `ERROR (CODE)` + summarize `logs/pipeline.log` once
 
 ## Storyboard planners
@@ -76,6 +76,7 @@ npm test
 | `auto` | Try LLM, fall back to heuristic |
 
 OpenCode may also author a storyboard JSON and apply with `--storyboard path.json`.
+Camera fields live on `shots[].visualIntent.camera`.
 
 ## Job layout
 
@@ -83,7 +84,7 @@ OpenCode may also author a storyboard JSON and apply with `--storyboard path.jso
 jobs/job-…/
 ├── analysis/
 │   ├── timeline.json
-│   ├── storyboard.json    # Phase 3
+│   ├── storyboard.json    # Phase 3–6 visualIntent + camera
 │   └── …
 ├── scenes/scene.html
 ├── output/final.mp4
@@ -94,6 +95,7 @@ jobs/job-…/
 
 Scenes expose `window.renderAt(time)` + `__sceneReady`.
 No `Date.now` / unseeded `Math.random` / realtime animation for frame correctness.
+Camera evaluation is a pure function of shot progress + absolute time (handheld uses time, still deterministic).
 
 ## Failure recovery
 

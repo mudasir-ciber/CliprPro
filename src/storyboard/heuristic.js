@@ -4,6 +4,7 @@
  */
 import { normalizeVisualIntent, paletteFor } from './schema.js';
 import { ROLE_VISUAL_2D } from '../visuals2d/presets.js';
+import { ROLE_CAMERA } from '../cinematic/presets.js';
 
 const ROLE_DEFAULTS = {
   hook: { mood: 'curious', layout: 'title-hero', motion: 'impact', zoom: 1.08 },
@@ -67,6 +68,7 @@ export function planStoryboardHeuristic({ timeline, script }) {
     const role = scene.segment?.type || 'development';
     const defaults = ROLE_DEFAULTS[role] || ROLE_DEFAULTS.development;
     const v2d = ROLE_VISUAL_2D[role] || ROLE_VISUAL_2D.development;
+    const cam = ROLE_CAMERA[role] || ROLE_CAMERA.development;
     const text = scene.narration?.text || sentenceMap.get(scene.sourceSentenceIds?.[0])?.text || '';
     const importance = scene.importance ?? 0.5;
     const emphasis = pickEmphasis(text);
@@ -76,6 +78,8 @@ export function planStoryboardHeuristic({ timeline, script }) {
     const zoom = defaults.zoom + (importance - 0.5) * 0.08;
     const motif = importance >= 0.85 && role === 'climax' ? 'rings' : v2d.motif;
     const transition = importance >= 0.8 ? 'zoom-punch' : v2d.transition;
+    const cameraMove = importance >= 0.9 ? 'dolly-in' : cam.move;
+    const cameraIntensity = Math.min(1, cam.intensity * (0.75 + importance * 0.5));
 
     const visualIntent = normalizeVisualIntent(
       {
@@ -88,18 +92,28 @@ export function planStoryboardHeuristic({ timeline, script }) {
         fx: v2d.fx,
         palette: paletteFor(mood),
         emphasis,
-        visualPrompt: visualPrompt({ role, mood, layout, motif, text, emphasis }),
-        camera: { zoom: Number(zoom.toFixed(3)), panX: 0, panY: role === 'hook' ? -0.02 : 0 },
+        visualPrompt: visualPrompt({ role, mood, layout, motif, text, emphasis }) + ` Camera: ${cameraMove}.`,
+        camera: {
+          move: cameraMove,
+          ease: cam.ease,
+          intensity: Number(cameraIntensity.toFixed(3)),
+          zoom: Number(zoom.toFixed(3)),
+          panX: role === 'hook' ? -0.02 : 0,
+          panY: role === 'hook' ? -0.02 : 0,
+          roll: 0,
+          fov: cam.fov
+        },
         elements: [
           { kind: 'badge', label: String(role).toUpperCase() },
           { kind: 'accent-orb', strength: importance },
           { kind: 'motif', name: motif },
+          { kind: 'camera', move: cameraMove },
           ...(emphasis[0] ? [{ kind: 'keyword', text: emphasis[0] }] : [])
         ],
         confidence: 0.55 + Math.min(0.35, importance * 0.35),
         planner: 'heuristic'
       },
-      { ...defaults, ...v2d }
+      { ...defaults, ...v2d, camera: cam }
     );
 
     shots.push({
@@ -116,19 +130,20 @@ export function planStoryboardHeuristic({ timeline, script }) {
   }
 
   return {
-    version: '4.0',
+    version: '6.0',
     planner: 'heuristic',
-    plannerVersion: '4.0.0',
+    plannerVersion: '6.0.0',
     jobId: timeline.jobId || null,
     generatedAt: new Date().toISOString(),
-    phase: 4,
+    phase: 6,
     shots,
     summary: {
       shotCount: shots.length,
       moods: [...new Set(shots.map((s) => s.visualIntent.mood))],
       layouts: [...new Set(shots.map((s) => s.visualIntent.layout))],
       motifs: [...new Set(shots.map((s) => s.visualIntent.motif))],
-      transitions: [...new Set(shots.map((s) => s.visualIntent.transition))]
+      transitions: [...new Set(shots.map((s) => s.visualIntent.transition))],
+      cameraMoves: [...new Set(shots.map((s) => s.visualIntent.camera?.move).filter(Boolean))]
     }
   };
 }

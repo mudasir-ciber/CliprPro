@@ -44,7 +44,7 @@ async function miniTimeline() {
 test('normalizeVisualIntent fills Phase 3 contract', () => {
   const intent = normalizeVisualIntent({ mood: 'intense', layout: 'callout', motion: 'impact', emphasis: ['Reveal'] });
   assert.equal(intent.type, 'storyboard');
-  assert.ok(['3.0', '4.0'].includes(intent.version));
+  assert.ok(['3.0', '4.0', '6.0'].includes(intent.version));
   assert.equal(intent.mood, 'intense');
   assert.ok(intent.palette.accent);
   assert.ok(intent.motif);
@@ -55,7 +55,7 @@ test('normalizeVisualIntent fills Phase 3 contract', () => {
 test('heuristic storyboard plans one shot per scene', async () => {
   const { script, timeline } = await miniTimeline();
   const sb = planStoryboardHeuristic({ timeline, script });
-  assert.ok(['3.0', '4.0'].includes(sb.version));
+  assert.ok(['3.0', '4.0', '6.0'].includes(sb.version));
   assert.equal(sb.planner, 'heuristic');
   assert.equal(sb.shots.length, timeline.scenes.length);
   assert.ok(sb.shots.every((s) => s.visualIntent.type === 'storyboard'));

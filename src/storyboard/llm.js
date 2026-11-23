@@ -130,16 +130,18 @@ export async function planStoryboardLlm({ timeline, script, config }) {
   });
 
   return {
-    version: '3.0',
+    version: '6.0',
     planner: 'llm',
     plannerVersion: model,
     jobId: timeline.jobId || null,
     generatedAt: new Date().toISOString(),
+    phase: 6,
     shots,
     summary: {
       shotCount: shots.length,
       moods: [...new Set(shots.map((s) => s.visualIntent.mood))],
       layouts: [...new Set(shots.map((s) => s.visualIntent.layout))],
+      cameraMoves: [...new Set(shots.map((s) => s.visualIntent.camera?.move).filter(Boolean))],
       model
     }
   };

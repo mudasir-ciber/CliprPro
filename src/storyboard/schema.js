@@ -1,12 +1,14 @@
 /**
- * Phase 3–4 visual-intent / storyboard schema helpers.
+ * Phase 3–6 visual-intent / storyboard schema helpers.
  */
 import { MOTIFS, TRANSITIONS, TYPE_STYLES, FX_FLAGS } from '../visuals2d/presets.js';
+import { normalizeCamera } from '../cinematic/evaluate.js';
+import { CAMERA_MOVES } from '../cinematic/presets.js';
 
 export const MOODS = ['curious', 'calm', 'intense', 'triumphant', 'reflective', 'urgent'];
 export const LAYOUTS = ['title-hero', 'split-focus', 'center-focus', 'callout', 'closing', 'kinetic'];
 export const MOTIONS = ['rise', 'orbit', 'pulse', 'sweep', 'fade', 'impact'];
-export { MOTIFS, TRANSITIONS, TYPE_STYLES, FX_FLAGS };
+export { MOTIFS, TRANSITIONS, TYPE_STYLES, FX_FLAGS, CAMERA_MOVES };
 
 export const PALETTES = Object.freeze({
   curious: { bg0: '#0b1220', bg1: '#151b3a', accent: '#6ea8ff', text: '#ffffff', muted: '#9eb6ff' },
@@ -43,7 +45,7 @@ export function normalizeVisualIntent(raw = {}, fallback = {}) {
 
   return {
     type: 'storyboard',
-    version: '4.0',
+    version: '6.0',
     mood,
     layout,
     motion,
@@ -54,11 +56,7 @@ export function normalizeVisualIntent(raw = {}, fallback = {}) {
     palette,
     emphasis: Array.isArray(raw.emphasis) ? raw.emphasis.slice(0, 6) : fallback.emphasis || [],
     visualPrompt: String(raw.visualPrompt || fallback.visualPrompt || '').slice(0, 400),
-    camera: {
-      zoom: Number.isFinite(raw.camera?.zoom) ? raw.camera.zoom : fallback.camera?.zoom ?? 1,
-      panX: Number.isFinite(raw.camera?.panX) ? raw.camera.panX : 0,
-      panY: Number.isFinite(raw.camera?.panY) ? raw.camera.panY : 0
-    },
+    camera: normalizeCamera(raw.camera || {}, fallback.camera || {}),
     elements: Array.isArray(raw.elements) ? raw.elements : fallback.elements || [],
     confidence: Number.isFinite(raw.confidence) ? raw.confidence : fallback.confidence ?? 0.6,
     planner: raw.planner || fallback.planner || 'heuristic'
@@ -71,7 +69,7 @@ export function validateStoryboard(storyboard) {
   if (!storyboard || typeof storyboard !== 'object') {
     return { valid: false, errors: [{ code: 'NOT_OBJECT', message: 'Storyboard must be an object' }], warnings: [] };
   }
-  if (!['3.0', '4.0'].includes(storyboard.version)) {
+  if (!['3.0', '4.0', '6.0'].includes(storyboard.version)) {
     warnings.push({ code: 'VERSION', message: `Unexpected storyboard version ${storyboard.version}` });
   }
   if (!Array.isArray(storyboard.shots) || !storyboard.shots.length) {

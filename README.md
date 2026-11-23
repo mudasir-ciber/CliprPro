@@ -23,7 +23,8 @@ Cursor builds this repository. **OpenCode** is the intended AI orchestrator (ski
 | 3 | Storyboard planning + storyboard Canvas scene | **Complete** |
 | 4 | Advanced 2D (motifs, transitions, typography, FX) | **Complete** |
 | 5 | Three.js / WebGL deterministic 3D scene | **Complete** |
-| 6+ | Cinematic camera / QC / repair | Not started |
+| 6 | Cinematic camera moves (dolly/orbit/crane/handheld) | **Complete** |
+| 7+ | Visual QC / auto-repair / long-form | Not started |
 
 ## Prerequisites
 
@@ -87,6 +88,10 @@ npm run generate -- --input input --scene threejs
 ```
 
 Uses a local `three` build copied into the job `scenes/vendor/` folder (works with `file://` / Playwright, no CDN). Default scene remains `storyboard` (Canvas 2D).
+
+### Phase 6 cinematic camera
+
+Heuristic (and LLM) storyboards set `visualIntent.camera` per shot (`move`, `ease`, `intensity`, `zoom`/`pan`/`roll`/`fov`). Both `storyboard` and `threejs` scenes evaluate moves over shot-local progress — dolly, orbit, crane, handheld, push-slide, whip-pan. Explicit `camera.from` / `camera.to` keyframes override procedural moves.
 
 ## Input format
 
@@ -189,14 +194,14 @@ Presets live in `src/visuals2d/presets.js` and are applied by the heuristic plan
 ## Known limitations
 
 - Default transcription is estimated unless Whisper is configured.
-- Heuristic + advanced 2D improve look, but not full LLM cinematic art direction / 3D.
+- Heuristic camera + 2D/3D improve look, but not full LLM cinematic art direction.
 - Narrative roles remain heuristics unless an external agent supplies a storyboard JSON.
 - Per-frame Playwright screenshots are correct but slow on long videos.
 - Fonts depend on the host OS (Segoe UI on Windows).
 
 ## Roadmap
 
-1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D ✓ · 5. Three.js/WebGL ✓ · 6. Cinematic · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
+1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D ✓ · 5. Three.js/WebGL ✓ · 6. Cinematic ✓ · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
 
 ## License
 

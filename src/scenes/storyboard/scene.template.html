@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Scene: storyboard (Phase 4)</title>
+<title>Scene: storyboard (Phase 4+6)</title>
 <style>
   html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
   canvas { display: block; }
@@ -13,9 +13,9 @@
 <script>
 "use strict";
 /*
- * STORYBOARD SCENE — Phase 4 Advanced 2D
+ * STORYBOARD SCENE — Phase 4 Advanced 2D + Phase 6 cinematic camera
  * Deterministic: pure function of time + CFG.shots[].visualIntent
- * Motifs / transitions / typography / fx — deterministic only (no wall-clock or unseeded RNG)
+ * Motifs / transitions / typography / fx / camera moves — no wall-clock or unseeded RNG
  */
 const CFG = __SCENE_CONFIG__;
 const W = CFG.width, H = CFG.height, D = CFG.durationSec;
@@ -151,6 +151,52 @@ function typeSpec(style) {
     case 'display':
     default: return { weight: '700', size: 56, tracking: 0.3, transform: 'none' };
   }
+}
+
+function easeCamera(t, name) {
+  const x = clamp(t);
+  if (name === 'linear') return x;
+  if (name === 'ease-in') return x * x * x;
+  if (name === 'ease-out') return 1 - Math.pow(1 - x, 3);
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+function evalCamera(cam, p, t) {
+  cam = cam || {};
+  const move = cam.move || 'static';
+  const easeName = cam.ease || 'ease-in-out';
+  const intensity = Number.isFinite(cam.intensity) ? cam.intensity : 0.5;
+  const e = easeCamera(p, easeName);
+  let zoom = Number.isFinite(cam.zoom) ? cam.zoom : 1;
+  let panX = Number.isFinite(cam.panX) ? cam.panX : 0;
+  let panY = Number.isFinite(cam.panY) ? cam.panY : 0;
+  let roll = Number.isFinite(cam.roll) ? cam.roll : 0;
+  const baseZoom = zoom, basePanX = panX, basePanY = panY, baseRoll = roll;
+  const k = intensity;
+  if (cam.from && cam.to) {
+    const a = cam.from, b = cam.to;
+    const L = (u, v, w) => (Number.isFinite(u) ? u : w) + ((Number.isFinite(v) ? v : w) - (Number.isFinite(u) ? u : w)) * e;
+    return { zoom: L(a.zoom, b.zoom, baseZoom), panX: L(a.panX, b.panX, basePanX), panY: L(a.panY, b.panY, basePanY), roll: L(a.roll, b.roll, baseRoll) };
+  }
+  if (move === 'dolly-in') zoom = lerp(baseZoom * (1 - 0.12 * k), baseZoom * (1 + 0.14 * k), e);
+  else if (move === 'dolly-out') zoom = lerp(baseZoom * (1 + 0.1 * k), baseZoom * (1 - 0.1 * k), e);
+  else if (move === 'orbit-left') { panX = basePanX + lerp(0.08 * k, -0.08 * k, e); panY = basePanY + Math.sin(e * Math.PI) * 0.02 * k; }
+  else if (move === 'orbit-right') { panX = basePanX + lerp(-0.08 * k, 0.08 * k, e); panY = basePanY + Math.sin(e * Math.PI) * 0.02 * k; }
+  else if (move === 'crane-up') { panY = basePanY + lerp(0.06 * k, -0.07 * k, e); zoom = lerp(baseZoom * 0.98, baseZoom * 1.04, e); }
+  else if (move === 'crane-down') panY = basePanY + lerp(-0.05 * k, 0.06 * k, e);
+  else if (move === 'handheld') {
+    panX = basePanX + Math.sin(t * 7.3) * 0.012 * k + Math.sin(t * 3.1) * 0.006 * k;
+    panY = basePanY + Math.cos(t * 6.1) * 0.01 * k;
+    roll = baseRoll + Math.sin(t * 5.2) * 0.8 * k;
+    zoom = baseZoom * (1 + Math.sin(t * 4.4) * 0.01 * k);
+  } else if (move === 'push-slide') {
+    panX = basePanX + lerp(-0.05 * k, 0.04 * k, e);
+    zoom = lerp(baseZoom * 0.97, baseZoom * 1.06, e);
+  } else if (move === 'whip-pan') {
+    panX = basePanX + ((e < 0.15 || e > 0.85) ? Math.sin(t * 30) * 0.04 * k : lerp(-0.12 * k, 0.12 * k, e));
+    roll = baseRoll + (e < 0.2 ? (1 - e / 0.2) * 3 * k : 0);
+  }
+  return { zoom, panX, panY, roll };
 }
 
 function drawBackground(t, palette, fx, parallax) {
@@ -388,7 +434,7 @@ function drawOverlay(t, palette, shot) {
     ctx.textAlign = 'left';
     ctx.fillStyle = palette.muted;
     ctx.font = '600 18px ' + FONT;
-    const bits = [vi.mood, vi.layout, vi.motif, vi.transition].filter(Boolean).map((s) => String(s).toUpperCase());
+    const bits = [vi.mood, vi.layout, vi.motif, vi.transition, vi.camera && vi.camera.move].filter(Boolean).map((s) => String(s).toUpperCase());
     ctx.fillText(bits.join(' · '), 80, 100);
   }
 
@@ -418,9 +464,11 @@ window.renderAt = function renderAt(time) {
   const toff = transitionOffset(transition, p, t);
   const moff = motionOffset(motion, p, t);
   const offset = { x: toff.x + moff.x, y: toff.y + moff.y, s: toff.s * moff.s };
-  const zoom = (intent.camera && intent.camera.zoom) || 1;
-  const panX = ((intent.camera && intent.camera.panX) || 0) * DW;
-  const panY = ((intent.camera && intent.camera.panY) || 0) * DH;
+  const cam = evalCamera(intent.camera, p, t);
+  const zoom = cam.zoom;
+  const panX = cam.panX * DW;
+  const panY = cam.panY * DH;
+  const roll = (cam.roll || 0) * Math.PI / 180;
   const parallax = fx.includes('parallax')
     ? { x: Math.sin(t * 0.4) * 12 + panX * 0.15, y: Math.cos(t * 0.35) * 8 + panY * 0.15 }
     : { x: 0, y: 0 };
@@ -432,6 +480,7 @@ window.renderAt = function renderAt(time) {
 
   ctx.save();
   ctx.translate(DW / 2 + panX, DH / 2 + panY);
+  ctx.rotate(roll);
   ctx.scale(zoom, zoom);
   ctx.translate(-DW / 2, -DH / 2);
 
@@ -474,7 +523,7 @@ window.renderAt = function renderAt(time) {
   return t;
 };
 
-window.__scene = { name: 'storyboard', durationSec: D, width: W, height: H, fps: CFG.fps, phase: 4 };
+window.__scene = { name: 'storyboard', durationSec: D, width: W, height: H, fps: CFG.fps, phase: 6 };
 window.__sceneReady = true;
 </script>
 </body>
