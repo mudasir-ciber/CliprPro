@@ -70,9 +70,10 @@ export async function renderWithSelfRepair(ctx) {
       timeline: frameTimeline,
       width: config.width,
       height: config.height,
-      config,
+      config: attempt > 0 ? { ...config, renderResume: false } : config,
       logger,
-      maxFrames
+      maxFrames,
+      analysisDir: job.paths.analysis
     });
     const renderSec = (Date.now() - t0) / 1000;
 

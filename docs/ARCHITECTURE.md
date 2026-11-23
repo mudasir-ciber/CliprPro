@@ -1,4 +1,4 @@
-# Architecture (Phases 1–8)
+# Architecture (Phases 1–9)
 
 ## Data flow
 
@@ -7,21 +7,18 @@ scripts/generate-video.js
         │
         ▼
 src/pipeline/analyzeVideo.js          (Phase 2)
-  → script / audio / transcript / alignment / pauses / narrative / importance
   → timeline.json
         │
         ▼
 src/pipeline/planStoryboard.js        (Phase 3)
-  → heuristic | llm | auto planner
-  → storyboard.json
-  → timeline.scenes[].visualIntent = storyboard shot
+  → storyboard.json + visualIntent
         │
         ▼
 src/pipeline/generateVideo.js
   → scenes/storyboard | threejs | basic
-  → Playwright renderAt(t) → PNG
-  → Phase 7 visual QC → analysis/qc.json (+ contact sheet)
-  → Phase 8 self-repair (bounded) → patch storyboard → re-render → QC
+  → Phase 9 chunked/parallel Playwright renderAt(t) → PNG
+  → Phase 7 visual QC → analysis/qc.json
+  → Phase 8 self-repair (bounded) → patch → re-render → QC
   → FFmpeg encode + original voiceover
   → verifyOutput
 ```
@@ -30,11 +27,10 @@ src/pipeline/generateVideo.js
 
 - Audio is the master clock.
 - `timeline.json` v2.0 bridges analysis and visuals.
-- Phase 3–6 `visualIntent.type = "storyboard"` (mood, layout, motion, motif, transition, typography, fx, palette, visualPrompt, camera).
-- Phase 6 `camera`: `{ move, ease, intensity, zoom, panX, panY, roll, fov, from?, to? }` evaluated in scene templates via shot-local progress.
-- Phase 7 `qc.json`: sampled frame stats + issues (`error` | `warning`); hard errors block encode unless repaired.
-- Phase 8 `repair.json`: attempt log; strategies map QC codes → storyboard patches + re-render.
-- `window.renderAt(time)` is a pure function of time.
+- Phase 3–6 `visualIntent` + Phase 6 cinematic `camera`.
+- Phase 7 `qc.json`; Phase 8 `repair.json`.
+- Phase 9: frames rendered in chunks across N workers; `analysis/render.json` + `render-progress.json` support resume.
+- `window.renderAt(time)` is a pure function of time (safe to parallelize).
 
 ## Modules
 
@@ -43,18 +39,24 @@ src/pipeline/generateVideo.js
 | Analysis | `src/analysis/` |
 | Timeline | `src/timeline/` |
 | Storyboard | `src/storyboard/` |
-| Advanced 2D presets | `src/visuals2d/` |
+| Advanced 2D | `src/visuals2d/` |
 | Cinematic camera | `src/cinematic/` |
 | Visual QC | `src/qc/` |
 | Self-repair | `src/repair/` |
+| Render (incl. long-form) | `src/renderer/` |
 | Scenes | `src/scenes/basic`, `storyboard`, `threejs` |
-| Render / encode | `src/renderer/` |
+
+## Long-form rendering
+
+- `planChunks(total, chunkSize)` splits the frame range.
+- `resolveWorkerCount` auto-bumps workers when `totalFrames >= longFormMinFrames` (default 120).
+- Workers = parallel Playwright pages in one browser (shared HTTP static server for Three.js).
+- `--no-resume` forces full rewrite; otherwise existing PNGs are skipped.
 
 ## OpenCode
 
 Skills/commands under `.opencode/` orchestrate via `npm run …`.
-OpenCode can plan shots (or supply JSON); the renderer executes them; QC gates bad frames; repair retries are bounded and logged.
 
 ## Phase boundary
 
-Phase 9+ (long-form performance, production packaging) is out of scope until requested.
+Phase 10 (production packaging / release polish) is out of scope until requested.

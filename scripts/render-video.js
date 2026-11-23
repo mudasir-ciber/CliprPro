@@ -18,7 +18,7 @@ import { VideoGenError, ErrorCodes } from '../src/utils/errors.js';
 import { fail, printRel } from './cli-shared.js';
 
 const USAGE = `Usage:
-  npm run render -- --job jobs/<job-id> [--fps 30] [--resolution 1920x1080] [--clean-frames] [--skip-qc] [--qc-strict] [--skip-repair] [--repair-attempts n]`;
+  npm run render -- --job jobs/<job-id> [--fps 30] [--resolution 1920x1080] [--clean-frames] [--skip-qc] [--qc-strict] [--skip-repair] [--repair-attempts n] [--workers n] [--chunk-size n] [--no-resume]`;
 
 let values;
 try {
@@ -32,6 +32,9 @@ try {
       'qc-strict': { type: 'boolean', default: false },
       'skip-repair': { type: 'boolean', default: false },
       'repair-attempts': { type: 'string' },
+      workers: { type: 'string' },
+      'chunk-size': { type: 'string' },
+      'no-resume': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false }
     }
   }));
@@ -73,7 +76,10 @@ try {
     skipQc: values['skip-qc'],
     qcStrict: values['qc-strict'],
     skipRepair: values['skip-repair'],
-    repairMaxAttempts: values['repair-attempts']
+    repairMaxAttempts: values['repair-attempts'],
+    renderWorkers: values.workers,
+    renderChunkSize: values['chunk-size'],
+    renderResume: values['no-resume'] ? false : undefined
   });
   const logger = createLogger();
   logger.attachFile(path.join(jobDir, 'logs', 'pipeline.log'));

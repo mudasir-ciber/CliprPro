@@ -26,6 +26,9 @@ Options:
   --qc-strict            Treat QC warnings as failures
   --skip-repair          Disable Phase 8 self-repair loop
   --repair-attempts <n>  Max repair re-renders (default 2)
+  --workers <n>          Parallel render workers (Phase 9; auto≥2 on long jobs)
+  --chunk-size <n>       Frames per render chunk (default 90)
+  --no-resume            Do not skip existing PNG frames
   -h, --help`;
 
 const values = parseCli();
@@ -59,7 +62,10 @@ try {
     skipQc: values['skip-qc'],
     qcStrict: values['qc-strict'],
     skipRepair: values['skip-repair'],
-    repairMaxAttempts: values['repair-attempts']
+    repairMaxAttempts: values['repair-attempts'],
+    renderWorkers: values.workers,
+    renderChunkSize: values['chunk-size'],
+    renderResume: values['no-resume'] ? false : undefined
   });
 
   console.log(`

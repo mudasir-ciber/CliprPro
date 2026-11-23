@@ -26,6 +26,9 @@ export function baseOptions() {
     'qc-strict': { type: 'boolean', default: false },
     'skip-repair': { type: 'boolean', default: false },
     'repair-attempts': { type: 'string' },
+    workers: { type: 'string' },
+    'chunk-size': { type: 'string' },
+    'no-resume': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false }
   };
 }

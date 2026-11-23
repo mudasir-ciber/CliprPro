@@ -1,5 +1,5 @@
 /**
- * Centralized configuration for Phases 1–8.
+ * Centralized configuration for Phases 1–9.
  * Priority: function overrides → process env → .env file → defaults.
  */
 import fs from 'node:fs';
@@ -35,7 +35,13 @@ export const DEFAULTS = Object.freeze({
   qcStrict: false,
   repairMaxAttempts: 2,
   skipRepair: false,
-  repairOnWarnings: false
+  repairOnWarnings: false,
+  renderWorkers: 1,
+  renderChunkSize: 90,
+  renderResume: true,
+  longFormAuto: true,
+  longFormMinFrames: 120,
+  longFormWorkers: 2
 });
 
 /** Minimal .env loader (no dependency). Does not override variables already set. */
@@ -153,6 +159,19 @@ export function getConfig(overrides = {}) {
       overrides.repairOnWarnings === true ||
       process.env.REPAIR_ON_WARNINGS === '1' ||
       overrides.qcStrict === true ||
-      process.env.QC_STRICT === '1'
+      process.env.QC_STRICT === '1',
+    renderWorkers: overrides.renderWorkers ?? envNumber('RENDER_WORKERS', DEFAULTS.renderWorkers),
+    renderChunkSize: overrides.renderChunkSize ?? envNumber('RENDER_CHUNK_SIZE', DEFAULTS.renderChunkSize),
+    renderResume:
+      overrides.renderResume !== undefined
+        ? Boolean(overrides.renderResume)
+        : process.env.RENDER_RESUME !== '0',
+    longFormAuto:
+      overrides.longFormAuto !== undefined
+        ? Boolean(overrides.longFormAuto)
+        : process.env.LONG_FORM_AUTO !== '0',
+    longFormMinFrames:
+      overrides.longFormMinFrames ?? envNumber('LONG_FORM_MIN_FRAMES', DEFAULTS.longFormMinFrames),
+    longFormWorkers: overrides.longFormWorkers ?? envNumber('LONG_FORM_WORKERS', DEFAULTS.longFormWorkers)
   };
 }
