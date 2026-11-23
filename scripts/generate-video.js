@@ -20,7 +20,7 @@ Options:
   --engine <name>        estimated (default) | whisper
   --planner <name>       storyboard planner: heuristic (default) | llm | auto
   --storyboard <file>    apply an existing storyboard.json
-  --scene <name>         storyboard (default) | basic
+  --scene <name>         storyboard (default) | threejs | basic
   --skip-storyboard      Phase 2 timeline only (skip Phase 3)
   -h, --help`;
 

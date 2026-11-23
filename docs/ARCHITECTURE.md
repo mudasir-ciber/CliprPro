@@ -1,4 +1,4 @@
-# Architecture (Phases 1–4)
+# Architecture (Phases 1–5)
 
 ## Data flow
 
@@ -39,7 +39,7 @@ src/pipeline/generateVideo.js         (Phase 1 render)
 | Timeline | `src/timeline/` |
 | Storyboard | `src/storyboard/` |
 | Advanced 2D presets | `src/visuals2d/` |
-| Scenes | `src/scenes/basic`, `src/scenes/storyboard` |
+| Scenes | `src/scenes/basic`, `storyboard`, `threejs` |
 | Render / encode | `src/renderer/` |
 
 ## OpenCode
@@ -49,4 +49,4 @@ OpenCode can plan shots (or supply JSON); the renderer executes them.
 
 ## Phase boundary
 
-Phase 5+ (Three.js/WebGL, cinematic camera systems, QC, auto-repair) is out of scope until requested.
+Phase 6+ (cinematic camera systems, QC, auto-repair, long-form) is out of scope until requested.

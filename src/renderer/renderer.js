@@ -4,10 +4,12 @@
  * One browser, one page, one scene load. For every frame we call
  * window.renderAt(time) and capture a PNG. No realtime clock is involved.
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadPlaywright } from './playwright.js';
 import { resolveBrowserLaunch } from './browser.js';
+import { needsHttpScene, startStaticServer } from './staticServer.js';
 import { frameFileName, frameTime } from '../pipeline/timeline.js';
 import { VideoGenError, ErrorCodes } from '../utils/errors.js';
 
@@ -15,7 +17,7 @@ import { VideoGenError, ErrorCodes } from '../utils/errors.js';
  * @param {object} o
  * @param {string} o.sceneHtmlPath
  * @param {string} o.framesDir
- * @param {{totalFrames:number, fps:number}} o.timeline
+ * @param {{totalFrames:number, fps:number, durationSec?:number}} o.timeline
  * @param {number} o.width
  * @param {number} o.height
  * @param {object} o.config      from getConfig()
@@ -29,11 +31,17 @@ export async function renderFrames({ sceneHtmlPath, framesDir, timeline, width, 
   const pageErrors = [];
 
   let browser;
+  let staticServer = null;
   try {
     const launch = await resolveBrowserLaunch(config || {});
     const launchOpts = {
       headless: true,
-      args: config?.chromiumNoSandbox ? ['--no-sandbox', '--disable-setuid-sandbox'] : []
+      args: [
+        ...(config?.chromiumNoSandbox ? ['--no-sandbox', '--disable-setuid-sandbox'] : []),
+        '--enable-webgl',
+        '--ignore-gpu-blocklist',
+        '--use-gl=angle'
+      ]
     };
     if (launch.executablePath) launchOpts.executablePath = launch.executablePath;
     else if (launch.channel) launchOpts.channel = launch.channel;
@@ -52,10 +60,35 @@ export async function renderFrames({ sceneHtmlPath, framesDir, timeline, width, 
     const page = await context.newPage();
     page.on('pageerror', (e) => pageErrors.push(`pageerror: ${e.message}`));
     page.on('console', (m) => {
-      if (m.type() === 'error') pageErrors.push(`console.error: ${m.text()}`);
+      if (m.type() !== 'error') return;
+      const text = m.text();
+      // Chromium logs favicon / harmless 404s as console.error over http://
+      if (/favicon\.ico/i.test(text)) return;
+      if (/Failed to load resource:.*\b404\b/i.test(text) && !/\.(js|mjs|css|html|json|wasm)\b/i.test(text)) return;
+      pageErrors.push(`console.error: ${text}`);
     });
 
-    await page.goto(pathToFileURL(sceneHtmlPath).href, { waitUntil: 'load' });
+    const html = fs.readFileSync(sceneHtmlPath, 'utf8');
+    let sceneUrl = pathToFileURL(sceneHtmlPath).href;
+    if (needsHttpScene(html)) {
+      staticServer = await startStaticServer(path.dirname(sceneHtmlPath));
+      sceneUrl = staticServer.urlFor(path.basename(sceneHtmlPath));
+      logger?.info(`Scene served over HTTP :${staticServer.port}`);
+    }
+
+    await page.goto(sceneUrl, { waitUntil: 'load' });
+    try {
+      await page.waitForFunction(
+        () => window.__sceneReady === true && typeof window.renderAt === 'function',
+        { timeout: 30000 }
+      );
+    } catch (err) {
+      throw new VideoGenError(
+        ErrorCodes.SCENE_RENDER_FAILED,
+        'Scene did not become ready in time (missing renderAt / __sceneReady).',
+        { cause: err, details: pageErrors.join('\n') || String(err.message || err) }
+      );
+    }
     await assertSceneReady(page, pageErrors);
     logger?.info(`Scene loaded: ${path.basename(sceneHtmlPath)}`);
     logger?.info(`Rendering frames (${total} @ ${timeline.fps} fps, ${width}x${height})`);
@@ -85,6 +118,7 @@ export async function renderFrames({ sceneHtmlPath, framesDir, timeline, width, 
     return { framesRendered: total, framesDir };
   } finally {
     await browser.close();
+    if (staticServer) await staticServer.close();
   }
 }
 

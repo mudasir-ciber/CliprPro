@@ -22,7 +22,8 @@ Cursor builds this repository. **OpenCode** is the intended AI orchestrator (ski
 | 2 | Audio/script analysis + timeline engine | **Complete** |
 | 3 | Storyboard planning + storyboard Canvas scene | **Complete** |
 | 4 | Advanced 2D (motifs, transitions, typography, FX) | **Complete** |
-| 5+ | Three.js / cinematic / QC / repair | Not started |
+| 5 | Three.js / WebGL deterministic 3D scene | **Complete** |
+| 6+ | Cinematic camera / QC / repair | Not started |
 
 ## Prerequisites
 
@@ -77,7 +78,15 @@ npm run render -- --job jobs/job-YYYYMMDD-NNN
 | `npm run demo` | End-to-end sample |
 | `npm test` | Unit + integration tests |
 
-Common flags: `--script`, `--audio`, `--input`, `--fps`, `--resolution`, `--jobs-dir`, `--clean-frames`, `--recompute`, `--no-cache`, `--debug`, `--engine estimated|whisper`, `--planner heuristic|llm|auto`, `--scene storyboard|basic`, `--skip-storyboard`.
+Common flags: `--script`, `--audio`, `--input`, `--fps`, `--resolution`, `--jobs-dir`, `--clean-frames`, `--recompute`, `--no-cache`, `--debug`, `--engine estimated|whisper`, `--planner heuristic|llm|auto`, `--scene storyboard|threejs|basic`, `--skip-storyboard`.
+
+### Phase 5 Three.js
+
+```bash
+npm run generate -- --input input --scene threejs
+```
+
+Uses a local `three` build copied into the job `scenes/vendor/` folder (works with `file://` / Playwright, no CDN). Default scene remains `storyboard` (Canvas 2D).
 
 ## Input format
 
@@ -187,7 +196,7 @@ Presets live in `src/visuals2d/presets.js` and are applied by the heuristic plan
 
 ## Roadmap
 
-1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D ✓ · 5. Three.js/WebGL · 6. Cinematic · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
+1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D ✓ · 5. Three.js/WebGL ✓ · 6. Cinematic · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
 
 ## License
 

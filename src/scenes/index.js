@@ -1,11 +1,13 @@
-/** Scene registry. Phase 3 adds storyboard-driven Canvas scenes. */
+/** Scene registry — basic, storyboard (2D), threejs (Phase 5 WebGL). */
 import { generateBasicScene } from './basic/index.js';
 import { generateStoryboardScene } from './storyboard/index.js';
+import { generateThreejsScene } from './threejs/index.js';
 import { VideoGenError, ErrorCodes } from '../utils/errors.js';
 
 const SCENES = {
   basic: generateBasicScene,
-  storyboard: generateStoryboardScene
+  storyboard: generateStoryboardScene,
+  threejs: generateThreejsScene
 };
 
 export function generateScene(name, options) {

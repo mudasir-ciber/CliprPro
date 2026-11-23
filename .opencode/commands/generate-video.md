@@ -14,6 +14,7 @@ Steps:
    - Default planner is heuristic storyboard (Phase 3).
    - Pass `--planner llm` only if the user requests LLM planning and keys exist.
    - Pass `--skip-storyboard` only if the user wants Phase 2 visuals only.
+   - Pass `--scene threejs` for Phase 5 WebGL output (default is `storyboard` Canvas 2D).
 4. On success report Job ID, duration, FPS, resolution, storyboard shot count/planner, `output/final.mp4`, `analysis/timeline.json`, `analysis/storyboard.json`.
 5. On failure report `ERROR (CODE)` and summarize `logs/pipeline.log` once.
 

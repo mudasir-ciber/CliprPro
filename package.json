@@ -1,7 +1,7 @@
 {
   "name": "cliprpro",
-  "version": "0.4.0",
-  "description": "CliprPro — local-first, code-driven AI video generation pipeline (OpenCode-ready). Phases 1–4: foundation, timeline, storyboard, advanced 2D.",
+  "version": "0.5.0",
+  "description": "CliprPro — local-first, code-driven AI video generation pipeline (OpenCode-ready). Phases 1–5: foundation through Three.js/WebGL.",
   "type": "module",
   "private": true,
   "engines": {
@@ -19,6 +19,7 @@
     "test": "node --test"
   },
   "dependencies": {
-    "playwright": "^1.49.0"
+    "playwright": "^1.49.0",
+    "three": "^0.170.0"
   }
 }
