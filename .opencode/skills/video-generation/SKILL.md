@@ -1,9 +1,9 @@
 ---
 name: video-generation
-description: Operate CliprPro — local-first code-driven video pipeline. Analyze script+voiceover into a timeline, plan a Phase 3 storyboard (visualIntent), render deterministic Canvas frames with Playwright, encode with FFmpeg, mux original voiceover. Use when the user asks to generate, analyze, storyboard, render, validate, or debug a video.
+description: Operate CliprPro — local-first code-driven video pipeline. Analyze script+voiceover into a timeline, plan a storyboard with Phase 4 advanced 2D intents (motif/transition/typography/fx), render deterministic Canvas frames with Playwright, encode with FFmpeg, mux original voiceover. Use when the user asks to generate, analyze, storyboard, render, validate, or debug a video.
 ---
 
-# CliprPro Video Generation Skill (Phases 1–3)
+# CliprPro Video Generation Skill (Phases 1–4)
 
 ## Purpose
 
@@ -26,11 +26,13 @@ Audio duration is the **master clock**.
 **Implemented:**
 - Phase 1: deterministic render/encode/mux
 - Phase 2: script/audio/transcript/alignment/pauses/narrative/importance/timeline
-- Phase 3: storyboard planner (`heuristic` default, optional `llm`), `storyboard` Canvas scene (mood/layout/motion/palette), OpenCode commands
+- Phase 3: storyboard planner (`heuristic` default, optional `llm`)
+- Phase 4: advanced 2D motifs/transitions/typography/fx on the `storyboard` Canvas scene
+- OpenCode commands for generate / analyze / storyboard / render / validate / debug
 
-**NOT implemented yet (Phase 4+):**
-- Advanced multi-module 2D generators
+**NOT implemented yet (Phase 5+):**
 - Three.js / WebGL
+- Advanced cinematic camera systems
 - Visual QC / auto-repair
 - Long-form performance overhaul
 

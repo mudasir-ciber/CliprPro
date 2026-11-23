@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Scene: storyboard</title>
+<title>Scene: storyboard (Phase 4)</title>
 <style>
   html, body { margin: 0; padding: 0; background: #000; overflow: hidden; }
   canvas { display: block; }
@@ -13,8 +13,9 @@
 <script>
 "use strict";
 /*
- * STORYBOARD SCENE (Phase 3)
- * Deterministic: pixels are a pure function of time + CFG.shots visualIntent.
+ * STORYBOARD SCENE — Phase 4 Advanced 2D
+ * Deterministic: pure function of time + CFG.shots[].visualIntent
+ * Motifs / transitions / typography / fx — deterministic only (no wall-clock or unseeded RNG)
  */
 const CFG = __SCENE_CONFIG__;
 const W = CFG.width, H = CFG.height, D = CFG.durationSec;
@@ -28,6 +29,7 @@ const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const easeIn = (t) => t * t * t;
 
 function mulberry32(a) {
   return function () {
@@ -55,10 +57,30 @@ function wrapText(text, maxWidth, font) {
   if (line) lines.push(line);
   return lines.slice(0, 5);
 }
+function hexAlpha(hex, a) {
+  const h = String(hex || '#ffffff').replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const r = parseInt(full.slice(0, 2), 16) || 0;
+  const g = parseInt(full.slice(2, 4), 16) || 0;
+  const b = parseInt(full.slice(4, 6), 16) || 0;
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+function roundRectPath(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
 
 const rng = mulberry32(CFG.seed === undefined ? 42 : CFG.seed);
-const PARTICLES = Array.from({ length: 90 }, () => ({
-  x: rng() * DW, y: rng() * DH, r: 0.8 + rng() * 2.2, ph: rng() * Math.PI * 2, sp: 0.4 + rng() * 1.6
+const PARTICLES = Array.from({ length: 110 }, () => ({
+  x: rng() * DW, y: rng() * DH, r: 0.7 + rng() * 2.4, ph: rng() * Math.PI * 2, sp: 0.35 + rng() * 1.7, layer: rng() > 0.55 ? 1 : 0
+}));
+const STARS = Array.from({ length: 48 }, () => ({
+  x: rng() * DW, y: rng() * DH * 0.7, r: 1 + rng() * 2.5, ph: rng() * Math.PI * 2
 }));
 
 const DEFAULT_PALETTE = { bg0: '#0b1220', bg1: '#151b3a', accent: '#6ea8ff', text: '#ffffff', muted: '#9eb6ff' };
@@ -66,10 +88,10 @@ const DEFAULT_PALETTE = { bg0: '#0b1220', bg1: '#151b3a', accent: '#6ea8ff', tex
 function activeShot(t) {
   const list = CFG.shots || [];
   for (let i = 0; i < list.length; i++) {
-    if (t >= list[i].start && t < list[i].end) return list[i];
+    if (t >= list[i].start && t < list[i].end) return { shot: list[i], index: i };
   }
-  if (list.length && t >= list[list.length - 1].start) return list[list.length - 1];
-  return null;
+  if (list.length && t >= list[list.length - 1].start) return { shot: list[list.length - 1], index: list.length - 1 };
+  return { shot: null, index: -1 };
 }
 
 function localProgress(shot, t) {
@@ -78,141 +100,274 @@ function localProgress(shot, t) {
   return clamp((t - shot.start) / dur);
 }
 
-function motionOffset(motion, p, t) {
-  switch (motion) {
-    case 'impact': return { x: (1 - easeOut(clamp(p * 3))) * -40, y: (1 - easeOut(clamp(p * 3))) * 30, s: 0.92 + 0.12 * easeOut(clamp(p * 2.5)) };
-    case 'pulse': return { x: 0, y: Math.sin(t * 3) * 8, s: 1 + 0.04 * Math.sin(t * 4) };
-    case 'orbit': return { x: Math.cos(t * 1.2) * 24, y: Math.sin(t * 1.2) * 14, s: 1 };
-    case 'sweep': return { x: lerp(-60, 0, easeOut(p)), y: 0, s: 1 };
-    case 'fade': return { x: 0, y: 20 * (1 - easeOut(p)), s: 1 };
-    case 'rise':
-    default: return { x: 0, y: lerp(50, 0, easeOut(p)), s: lerp(0.96, 1, easeOut(p)) };
+function transitionAlpha(name, p) {
+  const enter = clamp(p / 0.22);
+  const exit = clamp((1 - p) / 0.18);
+  const gate = Math.min(easeOut(enter), easeOut(exit));
+  switch (name) {
+    case 'zoom-punch': return easeOut(clamp(p / 0.15)) * easeOut(exit);
+    case 'glitch-snap': return gate > 0.08 ? gate : gate * 0.3;
+    case 'wipe-soft': return easeInOut(enter) * easeOut(exit);
+    case 'slide-stack': return easeOut(enter) * easeOut(exit);
+    case 'rise-blur': return easeOut(enter) * easeOut(exit);
+    case 'soft-fade':
+    default: return gate;
   }
 }
 
-function drawBackground(t, palette, motion) {
-  const g = ctx.createLinearGradient(0, 0, DW, DH);
+function transitionOffset(name, p, t) {
+  const enter = easeOut(clamp(p / 0.28));
+  switch (name) {
+    case 'zoom-punch': return { x: 0, y: (1 - enter) * 40, s: 0.88 + 0.14 * enter };
+    case 'slide-stack': return { x: (1 - enter) * -120, y: 0, s: 1 };
+    case 'wipe-soft': return { x: (1 - enter) * 80, y: 0, s: 1 };
+    case 'rise-blur': return { x: 0, y: (1 - enter) * 70, s: 0.97 + 0.03 * enter };
+    case 'glitch-snap': {
+      const j = (p < 0.12 || p > 0.88) ? Math.sin(t * 40) * 10 : 0;
+      return { x: j, y: -j * 0.3, s: 1 };
+    }
+    case 'soft-fade':
+    default: return { x: 0, y: (1 - enter) * 28, s: 1 };
+  }
+}
+
+function motionOffset(motion, p, t) {
+  switch (motion) {
+    case 'impact': return { x: (1 - easeOut(clamp(p * 3))) * -36, y: (1 - easeOut(clamp(p * 3))) * 24, s: 0.94 + 0.1 * easeOut(clamp(p * 2.5)) };
+    case 'pulse': return { x: 0, y: Math.sin(t * 3) * 8, s: 1 + 0.045 * Math.sin(t * 4) };
+    case 'orbit': return { x: Math.cos(t * 1.2) * 26, y: Math.sin(t * 1.2) * 14, s: 1 };
+    case 'sweep': return { x: lerp(-50, 0, easeOut(p)), y: 0, s: 1 };
+    case 'fade': return { x: 0, y: 18 * (1 - easeOut(p)), s: 1 };
+    case 'rise':
+    default: return { x: 0, y: lerp(44, 0, easeOut(p)), s: lerp(0.97, 1, easeOut(p)) };
+  }
+}
+
+function typeSpec(style) {
+  switch (style) {
+    case 'bold-impact': return { weight: '800', size: 68, tracking: 0.5, transform: 'none' };
+    case 'editorial': return { weight: '500', size: 52, tracking: 0.2, transform: 'none' };
+    case 'mono-tech': return { weight: '600', size: 46, tracking: 1.2, transform: 'uppercase', family: 'Consolas, "Courier New", monospace' };
+    case 'display':
+    default: return { weight: '700', size: 56, tracking: 0.3, transform: 'none' };
+  }
+}
+
+function drawBackground(t, palette, fx, parallax) {
+  const g = ctx.createLinearGradient(0, 0, DW * 0.2, DH);
   g.addColorStop(0, palette.bg0);
   g.addColorStop(1, palette.bg1);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, DW, DH);
 
+  const px = parallax ? parallax.x : 0;
+  const py = parallax ? parallax.y : 0;
   for (const s of PARTICLES) {
-    const a = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * s.sp + s.ph));
-    ctx.fillStyle = palette.accent;
-    ctx.globalAlpha = a * 0.35;
+    const depth = s.layer ? 1.4 : 0.7;
+    const a = 0.2 + 0.5 * (0.5 + 0.5 * Math.sin(t * s.sp + s.ph));
+    ctx.fillStyle = hexAlpha(palette.accent, a * (s.layer ? 0.45 : 0.28));
     ctx.beginPath();
-    ctx.arc(s.x + Math.sin(t * 0.3 + s.ph) * 10, s.y, s.r, 0, Math.PI * 2);
+    ctx.arc(s.x + px * depth + Math.sin(t * 0.25 + s.ph) * 8, s.y + py * depth, s.r, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.globalAlpha = 1;
 
-  // Accent wash
-  const cx = DW * (0.5 + 0.08 * Math.sin(t * 0.5));
-  const cy = DH * (0.4 + 0.05 * Math.cos(t * 0.4));
-  const rg = ctx.createRadialGradient(cx, cy, 40, cx, cy, 700);
-  rg.addColorStop(0, palette.accent + '55');
+  const cx = DW * (0.5 + 0.06 * Math.sin(t * 0.45)) + px * 1.2;
+  const cy = DH * (0.42 + 0.04 * Math.cos(t * 0.35)) + py;
+  const rg = ctx.createRadialGradient(cx, cy, 30, cx, cy, 760);
+  rg.addColorStop(0, hexAlpha(palette.accent, fx.includes('glow') ? 0.38 : 0.18));
   rg.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = rg;
   ctx.fillRect(0, 0, DW, DH);
-
-  if (motion === 'impact' || motion === 'kinetic') {
-    ctx.strokeStyle = palette.accent;
-    ctx.globalAlpha = 0.15;
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 6; i++) {
-      const y = 180 + i * 140 + Math.sin(t + i) * 8;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(DW, y + 40);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
 }
 
-function drawOrb(x, y, r, palette, t, strength) {
-  const pulse = 1 + 0.08 * Math.sin(t * 3) * (strength || 0.5);
+function drawMotif(motif, palette, t, strength, layout) {
+  const s = 0.5 + (strength || 0.5) * 0.5;
   ctx.save();
-  ctx.shadowColor = palette.accent;
-  ctx.shadowBlur = 36;
-  const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r * pulse);
-  g.addColorStop(0, '#ffffff');
-  g.addColorStop(0.35, palette.accent);
-  g.addColorStop(1, palette.bg1);
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(x, y, r * pulse, 0, Math.PI * 2);
-  ctx.fill();
+  if (layout === 'split-focus') ctx.translate(1380, 560);
+  else if (layout === 'callout') ctx.translate(960, 700);
+  else if (layout === 'title-hero') ctx.translate(960, 760);
+  else if (layout === 'closing') ctx.translate(960, 760);
+  else ctx.translate(960, 620);
+  ctx.scale(s, s);
+
+  if (motif === 'waveform') {
+    ctx.strokeStyle = hexAlpha(palette.accent, 0.85);
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let x = -420; x <= 420; x += 8) {
+      const y = Math.sin(x * 0.02 + t * 3) * 50 + Math.sin(x * 0.05 + t * 1.7) * 22;
+      if (x === -420) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  } else if (motif === 'constellation') {
+    ctx.fillStyle = palette.accent;
+    for (const st of STARS) {
+      const a = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 1.5 + st.ph));
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.arc((st.x - DW / 2) * 0.45, (st.y - DH * 0.2) * 0.45, st.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = palette.muted;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = i / 10 * Math.PI * 2 + t * 0.2;
+      const x = Math.cos(a) * 180, y = Math.sin(a) * 100;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  } else if (motif === 'grid') {
+    ctx.strokeStyle = hexAlpha(palette.accent, 0.22);
+    ctx.lineWidth = 1.5;
+    for (let i = -5; i <= 5; i++) {
+      ctx.beginPath(); ctx.moveTo(i * 70, -260); ctx.lineTo(i * 70, 260); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-320, i * 50); ctx.lineTo(320, i * 50); ctx.stroke();
+    }
+    ctx.strokeStyle = palette.accent;
+    ctx.globalAlpha = 0.7;
+    ctx.strokeRect(-160, -90, 320, 180);
+    ctx.globalAlpha = 1;
+  } else if (motif === 'ribbons') {
+    for (let i = 0; i < 4; i++) {
+      ctx.strokeStyle = hexAlpha(palette.accent, 0.35 + i * 0.12);
+      ctx.lineWidth = 10 - i * 1.5;
+      ctx.beginPath();
+      for (let x = -400; x <= 400; x += 10) {
+        const y = Math.sin(x * 0.01 + t * 1.2 + i) * (70 + i * 18) + i * 20;
+        if (x === -400) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  } else if (motif === 'rings') {
+    if (fxGlow()) ctx.shadowColor = palette.accent, ctx.shadowBlur = 28;
+    ctx.strokeStyle = palette.accent;
+    for (let i = 1; i <= 5; i++) {
+      ctx.globalAlpha = 0.25 + i * 0.1;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 50 * i + Math.sin(t * 2 + i) * 6, 28 * i + Math.cos(t * 2 + i) * 4, t * 0.15, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  } else if (motif === 'bars') {
+    for (let i = 0; i < 16; i++) {
+      const h = 40 + (0.5 + 0.5 * Math.sin(t * 4 + i * 0.7)) * 160;
+      ctx.fillStyle = hexAlpha(palette.accent, 0.35 + (i % 3) * 0.15);
+      ctx.fillRect(-280 + i * 36, -h / 2, 22, h);
+    }
+  } else if (motif === 'aurora') {
+    for (let i = 0; i < 5; i++) {
+      const gg = ctx.createLinearGradient(-300, -200, 300, 200);
+      gg.addColorStop(0, 'rgba(0,0,0,0)');
+      gg.addColorStop(0.5, hexAlpha(palette.accent, 0.22 - i * 0.03));
+      gg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gg;
+      ctx.beginPath();
+      ctx.ellipse(Math.sin(t + i) * 40, Math.cos(t * 0.7 + i) * 20, 340 - i * 30, 120 - i * 12, 0.4 + i * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    // geometric
+    if (fxGlow()) ctx.shadowColor = palette.accent, ctx.shadowBlur = 30;
+    ctx.fillStyle = palette.accent;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = t * 0.8 + i * Math.PI / 3;
+      const x = Math.cos(a) * 110, y = Math.sin(a) * 110;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    for (let i = 0; i < 3; i++) {
+      const a = -t * 1.3 + i * Math.PI * 2 / 3;
+      const x = Math.cos(a) * 48, y = Math.sin(a) * 48;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.restore();
+
+  function fxGlow() { return true; }
 }
 
 function drawBadge(label, x, y, palette) {
   ctx.font = '700 22px ' + FONT;
   const padX = 18, padY = 10;
   const tw = ctx.measureText(label).width;
-  ctx.fillStyle = palette.accent + '33';
+  const w = tw + padX * 2, h = 22 + padY * 2;
+  ctx.fillStyle = hexAlpha(palette.accent, 0.18);
   ctx.strokeStyle = palette.accent;
   ctx.lineWidth = 2;
-  const w = tw + padX * 2, h = 22 + padY * 2;
-  const r = 8;
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  roundRectPath(x, y, w, h, 8);
+  ctx.fill(); ctx.stroke();
   ctx.fillStyle = palette.muted;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, x + padX, y + h / 2);
 }
 
-function drawNarration(shot, palette, layout, offset, alpha) {
+function drawNarration(shot, palette, layout, offset, alpha, typography) {
   const text = shot.text || '';
   if (!text) return;
-  const maxW = layout === 'split-focus' ? 900 : 1500;
-  const size = layout === 'title-hero' ? 64 : layout === 'callout' ? 56 : 50;
-  const font = '700 ' + size + 'px ' + FONT;
-  const lines = wrapText(text, maxW, font);
+  const spec = typeSpec(typography || 'display');
+  const maxW = layout === 'split-focus' ? 920 : 1520;
+  const size = layout === 'title-hero' ? spec.size + 10 : layout === 'callout' ? spec.size + 4 : spec.size;
+  const family = spec.family || FONT;
+  const font = spec.weight + ' ' + size + 'px ' + family;
+  let display = text;
+  if (spec.transform === 'uppercase') display = text.toUpperCase();
+  const lines = wrapText(display, maxW, font);
   ctx.globalAlpha = alpha;
   ctx.fillStyle = palette.text;
   ctx.font = font;
   ctx.textBaseline = 'middle';
 
   let x = DW / 2 + offset.x;
-  let y = (layout === 'closing' ? 520 : 360) + offset.y;
+  let y = (layout === 'closing' ? 500 : 340) + offset.y;
   ctx.textAlign = 'center';
-  if (layout === 'split-focus') {
-    x = 220 + offset.x;
-    y = 340 + offset.y;
-    ctx.textAlign = 'left';
-  }
-  if (layout === 'callout') {
-    y = 300 + offset.y;
-  }
+  if (layout === 'split-focus') { x = 200 + offset.x; y = 330 + offset.y; ctx.textAlign = 'left'; }
+  if (layout === 'callout') y = 280 + offset.y;
 
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], x, y + i * (size + 14) * offset.s);
+    ctx.fillText(lines[i], x, y + i * (size + 16) * offset.s);
   }
 
-  // Emphasis underline on first keyword if present
   const emp = shot.visualIntent && shot.visualIntent.emphasis && shot.visualIntent.emphasis[0];
-  if (emp && lines[0] && lines[0].toLowerCase().includes(String(emp).toLowerCase())) {
+  if (emp && lines[0]) {
     ctx.strokeStyle = palette.accent;
-    ctx.globalAlpha = alpha * 0.85;
+    ctx.globalAlpha = alpha * 0.9;
     ctx.lineWidth = 4;
     const w = Math.min(ctx.measureText(lines[0]).width, maxW);
     const x0 = ctx.textAlign === 'left' ? x : x - w / 2;
     ctx.beginPath();
-    ctx.moveTo(x0, y + size * 0.55);
-    ctx.lineTo(x0 + w, y + size * 0.55);
+    ctx.moveTo(x0, y + size * 0.58);
+    ctx.lineTo(x0 + w * 0.55, y + size * 0.58);
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
+}
+
+function drawVignette(fx) {
+  if (!fx.includes('vignette')) return;
+  const v = ctx.createRadialGradient(DW / 2, DH / 2, DH * 0.25, DW / 2, DH / 2, DH * 0.95);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, DW, DH);
+}
+
+function drawScan(fx, t) {
+  if (!fx.includes('scan')) return;
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  for (let y = (Math.floor(t * 40) % 6); y < DH; y += 6) ctx.fillRect(0, y, DW, 2);
 }
 
 function drawOverlay(t, palette, shot) {
@@ -222,17 +377,19 @@ function drawOverlay(t, palette, shot) {
   ctx.fillStyle = palette.accent;
   ctx.fillRect(x0, y, (x1 - x0) * (D > 0 ? t / D : 0), 8);
 
-  ctx.font = '400 26px Consolas, "Courier New", monospace';
+  ctx.font = '400 24px Consolas, "Courier New", monospace';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
   ctx.fillText(timecode(t) + ' / ' + timecode(D), DW - 80, 48);
 
-  if (shot && shot.visualIntent && shot.visualIntent.mood) {
+  if (shot && shot.visualIntent) {
+    const vi = shot.visualIntent;
     ctx.textAlign = 'left';
     ctx.fillStyle = palette.muted;
-    ctx.font = '600 20px ' + FONT;
-    ctx.fillText(String(shot.visualIntent.mood).toUpperCase() + ' · ' + String(shot.visualIntent.layout || ''), 80, 100);
+    ctx.font = '600 18px ' + FONT;
+    const bits = [vi.mood, vi.layout, vi.motif, vi.transition].filter(Boolean).map((s) => String(s).toUpperCase());
+    ctx.fillText(bits.join(' · '), 80, 100);
   }
 
   const fadeLen = Math.min(0.7, D * 0.08);
@@ -247,52 +404,60 @@ window.renderAt = function renderAt(time) {
   const n = Number(time);
   if (!Number.isFinite(n)) throw new Error('renderAt: time must be a finite number, got ' + time);
   const t = clamp(n, 0, D);
-  const shot = activeShot(t);
+  const { shot } = activeShot(t);
   const intent = (shot && shot.visualIntent) || {};
   const palette = intent.palette || DEFAULT_PALETTE;
   const layout = intent.layout || 'center-focus';
   const motion = intent.motion || 'rise';
+  const motif = intent.motif || 'geometric';
+  const transition = intent.transition || 'soft-fade';
+  const typography = intent.typography || 'display';
+  const fx = Array.isArray(intent.fx) ? intent.fx : ['glow', 'vignette'];
   const p = localProgress(shot, t);
-  const enter = easeOut(clamp(p / 0.25));
-  const offset = motionOffset(motion, p, t);
+  const alpha = transitionAlpha(transition, p);
+  const toff = transitionOffset(transition, p, t);
+  const moff = motionOffset(motion, p, t);
+  const offset = { x: toff.x + moff.x, y: toff.y + moff.y, s: toff.s * moff.s };
   const zoom = (intent.camera && intent.camera.zoom) || 1;
   const panX = ((intent.camera && intent.camera.panX) || 0) * DW;
   const panY = ((intent.camera && intent.camera.panY) || 0) * DH;
+  const parallax = fx.includes('parallax')
+    ? { x: Math.sin(t * 0.4) * 12 + panX * 0.15, y: Math.cos(t * 0.35) * 8 + panY * 0.15 }
+    : { x: 0, y: 0 };
 
   ctx.setTransform(W / DW, 0, 0, H / DH, 0, 0);
   ctx.globalAlpha = 1;
   ctx.shadowBlur = 0;
   ctx.clearRect(0, 0, DW, DH);
 
-  // Camera transform
   ctx.save();
   ctx.translate(DW / 2 + panX, DH / 2 + panY);
   ctx.scale(zoom, zoom);
   ctx.translate(-DW / 2, -DH / 2);
 
-  drawBackground(t, palette, motion);
+  drawBackground(t, palette, fx, parallax);
 
   if (shot) {
-    const badge = (intent.elements || []).find((e) => e.kind === 'badge');
-    if (badge && badge.label) drawBadge(badge.label, layout === 'split-focus' ? 220 : 80, 160, palette);
+    ctx.globalAlpha = alpha;
+    drawMotif(motif, palette, t, shot.importance || 0.5, layout);
+    ctx.globalAlpha = 1;
 
-    if (layout === 'split-focus' || layout === 'kinetic' || layout === 'callout') {
-      drawOrb(layout === 'split-focus' ? 1450 : 960, layout === 'callout' ? 720 : 560, 110 + 40 * (shot.importance || 0.5), palette, t, shot.importance || 0.5);
-    } else if (layout === 'title-hero') {
-      drawOrb(960, 780, 90, palette, t, 0.7);
-    } else if (layout === 'closing') {
-      drawOrb(960, 780, 70, palette, t, 0.4);
+    const badge = (intent.elements || []).find((e) => e.kind === 'badge');
+    if (badge && badge.label) {
+      ctx.globalAlpha = alpha;
+      drawBadge(badge.label, layout === 'split-focus' ? 200 : 80, 150, palette);
+      ctx.globalAlpha = 1;
     }
 
-    drawNarration(shot, palette, layout, offset, enter);
+    drawNarration(shot, palette, layout, offset, alpha, typography);
 
     const kw = (intent.elements || []).find((e) => e.kind === 'keyword');
-    if (kw && kw.text && layout !== 'title-hero') {
-      ctx.globalAlpha = enter * 0.9;
-      ctx.font = '700 28px ' + FONT;
+    if (kw && kw.text) {
+      ctx.globalAlpha = alpha * 0.92;
+      ctx.font = '800 26px ' + FONT;
       ctx.fillStyle = palette.accent;
       ctx.textAlign = 'center';
-      ctx.fillText(String(kw.text).toUpperCase(), DW / 2 + offset.x, 900 + offset.y * 0.3);
+      ctx.fillText(String(kw.text).toUpperCase(), DW / 2 + offset.x * 0.4, 910 + offset.y * 0.2);
       ctx.globalAlpha = 1;
     }
   } else {
@@ -302,12 +467,14 @@ window.renderAt = function renderAt(time) {
     ctx.fillText(CFG.title || 'CliprPro', DW / 2, DH / 2);
   }
 
+  drawVignette(fx);
+  drawScan(fx, t);
   ctx.restore();
   drawOverlay(t, palette, shot);
   return t;
 };
 
-window.__scene = { name: 'storyboard', durationSec: D, width: W, height: H, fps: CFG.fps, phase: 3 };
+window.__scene = { name: 'storyboard', durationSec: D, width: W, height: H, fps: CFG.fps, phase: 4 };
 window.__sceneReady = true;
 </script>
 </body>

@@ -1,8 +1,9 @@
 /**
- * Deterministic heuristic storyboard planner (local, no LLM required).
- * Maps narrative role + importance + text cues → visualIntent per scene.
+ * Deterministic heuristic storyboard planner (Phases 3–4).
+ * Maps narrative role + importance + text cues → visualIntent (incl. advanced 2D).
  */
 import { normalizeVisualIntent, paletteFor } from './schema.js';
+import { ROLE_VISUAL_2D } from '../visuals2d/presets.js';
 
 const ROLE_DEFAULTS = {
   hook: { mood: 'curious', layout: 'title-hero', motion: 'impact', zoom: 1.08 },
@@ -48,9 +49,9 @@ function moodFromText(text, fallback) {
   return fallback;
 }
 
-function visualPrompt({ role, mood, layout, text, emphasis }) {
+function visualPrompt({ role, mood, layout, motif, text, emphasis }) {
   const focus = emphasis.length ? emphasis.join(', ') : 'the core idea';
-  return `${role} shot, ${mood} mood, ${layout} composition. Narration: "${String(text).slice(0, 120)}". Emphasize: ${focus}.`;
+  return `${role} shot, ${mood} mood, ${layout} + ${motif} motif. Narration: "${String(text).slice(0, 110)}". Emphasize: ${focus}.`;
 }
 
 /**
@@ -65,6 +66,7 @@ export function planStoryboardHeuristic({ timeline, script }) {
   for (const scene of timeline.scenes || []) {
     const role = scene.segment?.type || 'development';
     const defaults = ROLE_DEFAULTS[role] || ROLE_DEFAULTS.development;
+    const v2d = ROLE_VISUAL_2D[role] || ROLE_VISUAL_2D.development;
     const text = scene.narration?.text || sentenceMap.get(scene.sourceSentenceIds?.[0])?.text || '';
     const importance = scene.importance ?? 0.5;
     const emphasis = pickEmphasis(text);
@@ -72,25 +74,32 @@ export function planStoryboardHeuristic({ timeline, script }) {
     const layout = importance >= 0.75 && role !== 'hook' ? 'callout' : defaults.layout;
     const motion = importance >= 0.8 ? 'impact' : defaults.motion;
     const zoom = defaults.zoom + (importance - 0.5) * 0.08;
+    const motif = importance >= 0.85 && role === 'climax' ? 'rings' : v2d.motif;
+    const transition = importance >= 0.8 ? 'zoom-punch' : v2d.transition;
 
     const visualIntent = normalizeVisualIntent(
       {
         mood,
         layout,
         motion,
+        motif,
+        transition,
+        typography: v2d.typography,
+        fx: v2d.fx,
         palette: paletteFor(mood),
         emphasis,
-        visualPrompt: visualPrompt({ role, mood, layout, text, emphasis }),
+        visualPrompt: visualPrompt({ role, mood, layout, motif, text, emphasis }),
         camera: { zoom: Number(zoom.toFixed(3)), panX: 0, panY: role === 'hook' ? -0.02 : 0 },
         elements: [
           { kind: 'badge', label: String(role).toUpperCase() },
           { kind: 'accent-orb', strength: importance },
+          { kind: 'motif', name: motif },
           ...(emphasis[0] ? [{ kind: 'keyword', text: emphasis[0] }] : [])
         ],
         confidence: 0.55 + Math.min(0.35, importance * 0.35),
         planner: 'heuristic'
       },
-      defaults
+      { ...defaults, ...v2d }
     );
 
     shots.push({
@@ -107,16 +116,19 @@ export function planStoryboardHeuristic({ timeline, script }) {
   }
 
   return {
-    version: '3.0',
+    version: '4.0',
     planner: 'heuristic',
-    plannerVersion: '3.0.0',
+    plannerVersion: '4.0.0',
     jobId: timeline.jobId || null,
     generatedAt: new Date().toISOString(),
+    phase: 4,
     shots,
     summary: {
       shotCount: shots.length,
       moods: [...new Set(shots.map((s) => s.visualIntent.mood))],
-      layouts: [...new Set(shots.map((s) => s.visualIntent.layout))]
+      layouts: [...new Set(shots.map((s) => s.visualIntent.layout))],
+      motifs: [...new Set(shots.map((s) => s.visualIntent.motif))],
+      transitions: [...new Set(shots.map((s) => s.visualIntent.transition))]
     }
   };
 }

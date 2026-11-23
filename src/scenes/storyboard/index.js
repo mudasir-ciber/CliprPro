@@ -52,7 +52,7 @@ export function generateStoryboardScene({
       width,
       height,
       seed,
-      phase: 3,
+      phase: 4,
       shots,
       segments: (timeline?.segments || []).map((s) => ({ start: s.start, end: s.end, type: s.type }))
     };

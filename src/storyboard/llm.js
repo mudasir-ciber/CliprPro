@@ -18,8 +18,9 @@ function buildPrompt(timeline, script) {
   return {
     system:
       'You are a video storyboard planner for a code-driven renderer. ' +
-      'Return ONLY valid JSON with shape {"shots":[{"sceneId":"SC001","mood":"...","layout":"...","motion":"...","emphasis":["..."],"visualPrompt":"...","camera":{"zoom":1.05}}]}. ' +
+      'Return ONLY valid JSON with shape {"shots":[{"sceneId":"SC001","mood":"...","layout":"...","motion":"...","motif":"...","transition":"...","typography":"...","fx":["glow"],"emphasis":["..."],"visualPrompt":"...","camera":{"zoom":1.05}}]}. ' +
       `mood in ${MOODS.join('|')}; layout in ${LAYOUTS.join('|')}; motion in ${MOTIONS.join('|')}. ` +
+      'motif/transition/typography are optional Phase 4 fields. ' +
       'One shot per sceneId. Keep visualPrompt under 200 chars. No markdown.',
     user: JSON.stringify({
       instruction: 'Plan cinematic but renderable 2D Canvas shot intents for each scene.',
@@ -111,6 +112,10 @@ export async function planStoryboardLlm({ timeline, script, config }) {
         mood: llm.mood,
         layout: llm.layout,
         motion: llm.motion,
+        motif: llm.motif,
+        transition: llm.transition,
+        typography: llm.typography,
+        fx: llm.fx,
         emphasis: llm.emphasis,
         visualPrompt: llm.visualPrompt,
         camera: llm.camera,

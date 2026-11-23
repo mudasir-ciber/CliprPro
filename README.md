@@ -21,7 +21,8 @@ Cursor builds this repository. **OpenCode** is the intended AI orchestrator (ski
 | 1 | Foundation + deterministic render/encode | **Complete** |
 | 2 | Audio/script analysis + timeline engine | **Complete** |
 | 3 | Storyboard planning + storyboard Canvas scene | **Complete** |
-| 4+ | Advanced 2D / 3D / QC / repair | Not started |
+| 4 | Advanced 2D (motifs, transitions, typography, FX) | **Complete** |
+| 5+ | Three.js / cinematic / QC / repair | Not started |
 
 ## Prerequisites
 
@@ -166,17 +167,27 @@ npm run generate -- --input input --planner llm
 
 The `storyboard` scene renders those intents as deterministic Canvas compositions (not Three.js).
 
+### Phase 4 advanced 2D
+
+Each shot can include:
+- **motif** — geometric, waveform, constellation, grid, ribbons, rings, bars, aurora
+- **transition** — soft-fade, rise-blur, wipe-soft, zoom-punch, slide-stack, glitch-snap
+- **typography** — display, editorial, mono-tech, bold-impact
+- **fx** — glow, vignette, parallax, scan
+
+Presets live in `src/visuals2d/presets.js` and are applied by the heuristic planner per narrative role.
+
 ## Known limitations
 
 - Default transcription is estimated unless Whisper is configured.
-- Heuristic storyboard is strong structure, not Claude-class cinematic art direction (LLM planner + Phase 4+ improve look).
+- Heuristic + advanced 2D improve look, but not full LLM cinematic art direction / 3D.
 - Narrative roles remain heuristics unless an external agent supplies a storyboard JSON.
 - Per-frame Playwright screenshots are correct but slow on long videos.
 - Fonts depend on the host OS (Segoe UI on Windows).
 
 ## Roadmap
 
-1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D · 5. Three.js/WebGL · 6. Cinematic · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
+1. Foundation ✓ · 2. Timeline engine ✓ · 3. Storyboard ✓ · 4. Advanced 2D ✓ · 5. Three.js/WebGL · 6. Cinematic · 7. Visual QC · 8. Self-repair · 9. Long-form · 10. Production
 
 ## License
 

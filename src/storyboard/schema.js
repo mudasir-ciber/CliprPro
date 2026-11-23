@@ -1,10 +1,12 @@
 /**
- * Phase 3 visual-intent / storyboard schema helpers.
+ * Phase 3–4 visual-intent / storyboard schema helpers.
  */
+import { MOTIFS, TRANSITIONS, TYPE_STYLES, FX_FLAGS } from '../visuals2d/presets.js';
 
 export const MOODS = ['curious', 'calm', 'intense', 'triumphant', 'reflective', 'urgent'];
 export const LAYOUTS = ['title-hero', 'split-focus', 'center-focus', 'callout', 'closing', 'kinetic'];
 export const MOTIONS = ['rise', 'orbit', 'pulse', 'sweep', 'fade', 'impact'];
+export { MOTIFS, TRANSITIONS, TYPE_STYLES, FX_FLAGS };
 
 export const PALETTES = Object.freeze({
   curious: { bg0: '#0b1220', bg1: '#151b3a', accent: '#6ea8ff', text: '#ffffff', muted: '#9eb6ff' },
@@ -20,8 +22,12 @@ export function paletteFor(mood) {
   return { ...PALETTES[key] };
 }
 
+function pickFrom(list, value, fallback) {
+  return list.includes(value) ? value : fallback;
+}
+
 /**
- * Normalize a visual intent into the Phase 3 contract.
+ * Normalize a visual intent into the Phase 3/4 contract.
  */
 export function normalizeVisualIntent(raw = {}, fallback = {}) {
   const mood = MOODS.includes(raw.mood) ? raw.mood : fallback.mood || 'curious';
@@ -29,12 +35,22 @@ export function normalizeVisualIntent(raw = {}, fallback = {}) {
   const motion = MOTIONS.includes(raw.motion) ? raw.motion : fallback.motion || 'rise';
   const palette = raw.palette && raw.palette.accent ? raw.palette : paletteFor(mood);
 
+  const motif = pickFrom(MOTIFS, raw.motif, fallback.motif || 'geometric');
+  const transition = pickFrom(TRANSITIONS, raw.transition, fallback.transition || 'soft-fade');
+  const typography = pickFrom(TYPE_STYLES, raw.typography, fallback.typography || 'display');
+  const fxRaw = Array.isArray(raw.fx) ? raw.fx : fallback.fx || ['glow', 'vignette'];
+  const fx = [...new Set(fxRaw.filter((f) => FX_FLAGS.includes(f)))];
+
   return {
     type: 'storyboard',
-    version: '3.0',
+    version: '4.0',
     mood,
     layout,
     motion,
+    motif,
+    transition,
+    typography,
+    fx,
     palette,
     emphasis: Array.isArray(raw.emphasis) ? raw.emphasis.slice(0, 6) : fallback.emphasis || [],
     visualPrompt: String(raw.visualPrompt || fallback.visualPrompt || '').slice(0, 400),
@@ -55,8 +71,8 @@ export function validateStoryboard(storyboard) {
   if (!storyboard || typeof storyboard !== 'object') {
     return { valid: false, errors: [{ code: 'NOT_OBJECT', message: 'Storyboard must be an object' }], warnings: [] };
   }
-  if (storyboard.version !== '3.0') {
-    warnings.push({ code: 'VERSION', message: `Expected version 3.0, got ${storyboard.version}` });
+  if (!['3.0', '4.0'].includes(storyboard.version)) {
+    warnings.push({ code: 'VERSION', message: `Unexpected storyboard version ${storyboard.version}` });
   }
   if (!Array.isArray(storyboard.shots) || !storyboard.shots.length) {
     errors.push({ code: 'NO_SHOTS', message: 'Storyboard has no shots' });
